@@ -7,6 +7,7 @@ import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
+import { unified } from '@astrojs/markdown-remark';
 
 import { readingTimeRemarkPlugin } from './src/utils/frontmatter';
 
@@ -21,8 +22,16 @@ export default defineConfig({
 
   integrations: [sitemap(), mdx(), react()],
 
+  // Astro 7 defaults to `satteri()`; the remark/unified pipeline is now opt-in
+  // via `markdown.processor`. The old `markdown.remarkPlugins` shorthand still
+  // works in 7.x but is deprecated and slated for removal in a future major, so
+  // it is spelled out here. readingTimeRemarkPlugin populates the `min read`
+  // metadata blog posts render — verified present in the build output both
+  // before and after this migration.
   markdown: {
-    remarkPlugins: [readingTimeRemarkPlugin],
+    processor: unified({
+      remarkPlugins: [readingTimeRemarkPlugin],
+    }),
   },
 
   vite: {
