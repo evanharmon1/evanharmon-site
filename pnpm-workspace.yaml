@@ -38,12 +38,18 @@ minimumReleaseAgeExclude:
 #
 # The ranges are version-keyed so each override becomes a no-op once the
 # parents resolve a patched version on their own.
+#
+# Each replacement range is capped at the tested major (`<9`, `<6`, `<11`). An
+# unbounded `>=` would let a future major in silently the next time the lockfile
+# is regenerated — and an override genuinely does cross majors regardless of the
+# parent's own constraint, which is exactly how minimatch@3 became 10 here.
+# Raising a cap means re-running `task verify` on the new major first.
 overrides:
   esbuild: '>=0.28.1'
   sharp@<0.35.0: 0.35.3
-  postcss@<8.5.18: '>=8.5.18'
-  brace-expansion@<5.0.8: '>=5.0.8'
-  minimatch@<10.2.5: '>=10.2.5'
+  postcss@<8.5.18: '>=8.5.18 <9'
+  brace-expansion@<5.0.8: '>=5.0.8 <6'
+  minimatch@<10.2.5: '>=10.2.5 <11'
 
 # Local customization (not from the harmon-init template): expose Astro's
 # transitive deps at the root node_modules so direct imports like
