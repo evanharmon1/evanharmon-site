@@ -21,9 +21,35 @@ minimumReleaseAgeExclude:
 # Security floor: esbuild <0.28.1 allows arbitrary file reads via the dev server
 # on Windows (GHSA; pnpm audit + Snyk). Astro/Vite still resolve 0.27.x — force
 # the patched line until they catch up.
+#
+# postcss <=8.5.17 is path traversal in the previous source map
+# (GHSA-r28c-9q8g-f849) and brace-expansion <=5.0.7 is DoS via unbounded
+# expansion (GHSA-mh99-v99m-4gvg). Both are transitive-only — postcss via
+# postcss-selector-parser, brace-expansion via minimatch under
+# @typescript-eslint/eslint. Both advisories are `high`, so
+# `task security:audit` (pnpm audit --audit-level=high) fails without these
+# floors, and brace-expansion has no patched 1.x — 5.0.8 is the first fix.
+#
+# minimatch is pinned WITH brace-expansion, not independently: minimatch@3
+# does `module.exports = expand` (the v1 shape), so lifting brace-expansion
+# alone breaks eslint with `TypeError: expand is not a function`. minimatch
+# @10.2.5 is the first release that depends on brace-expansion@^5, so the two
+# overrides have to move together. Drop them as a pair, never one at a time.
+#
+# The ranges are version-keyed so each override becomes a no-op once the
+# parents resolve a patched version on their own.
+#
+# Each replacement range is capped at the tested major (`<9`, `<6`, `<11`). An
+# unbounded `>=` would let a future major in silently the next time the lockfile
+# is regenerated — and an override genuinely does cross majors regardless of the
+# parent's own constraint, which is exactly how minimatch@3 became 10 here.
+# Raising a cap means re-running `task verify` on the new major first.
 overrides:
   esbuild: '>=0.28.1'
   sharp@<0.35.0: 0.35.3
+  postcss@<8.5.18: '>=8.5.18 <9'
+  brace-expansion@<5.0.8: '>=5.0.8 <6'
+  minimatch@<10.2.5: '>=10.2.5 <11'
 
 # Local customization (not from the harmon-init template): expose Astro's
 # transitive deps at the root node_modules so direct imports like
