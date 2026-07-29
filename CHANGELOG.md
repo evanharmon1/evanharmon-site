@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.1.0](https://github.com/evanharmon1/evanharmon-site/compare/v0.0.22...v0.1.0) (2026-07-26)
+
+
+### Features
+
+* **deps:** upgrade to Astro 7 ([#51](https://github.com/evanharmon1/evanharmon-site/issues/51)) ([8675ce8](https://github.com/evanharmon1/evanharmon-site/commit/8675ce8172f5e8fa53eb7f9b8f01b159ea6c02db))
+
+
+### Bug Fixes
+
+* **deps:** raise security floors for postcss and brace-expansion ([#49](https://github.com/evanharmon1/evanharmon-site/issues/49)) ([6651608](https://github.com/evanharmon1/evanharmon-site/commit/66516082faeadb00f7269940b3497917b176086e))
+
 ## [Unreleased]
 
 ### Added
