@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.1.1](https://github.com/evanharmon1/evanharmon-site/compare/v0.1.0...v0.1.1) (2026-08-01)
+
+
+### Bug Fixes
+
+* cover every GitHub SSH endpoint form in devcontainer rewrite ([#54](https://github.com/evanharmon1/evanharmon-site/issues/54)) ([249fd46](https://github.com/evanharmon1/evanharmon-site/commit/249fd46e8b007d24e103ba95b96bc8fca3dba320))
+
 ## [0.1.0](https://github.com/evanharmon1/evanharmon-site/compare/v0.0.22...v0.1.0) (2026-07-26)
 
 
