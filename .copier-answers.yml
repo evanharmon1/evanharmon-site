@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: 617a309bdf1743cb3e258eaf75deae234178a52d
+_commit: 4c457f195a22d38366b9ad9302431a32a516e210
 _src_path: https://github.com/evanharmon1/harmon-init
 bunch_add: false
 ci_runner: ubuntu-latest
@@ -10,6 +10,7 @@ codeql_languages:
 - python
 deploy_cloudflare_workers: true
 devcontainer: true
+use_alternative_claude_providers: true
 git_init: false
 github_org: evanharmon1
 github_release_init: false
@@ -28,9 +29,12 @@ run_task_install: false
 skill_categories:
 - universal
 - frontend
-snyk_scan_schedule: 'off'
+snyk_scan_schedule: weekly
 use_codeql: true
 use_codex_review: true
+use_codex_cloud_review: true
+use_coderabbit: false
 use_foreman: true
 use_release_please: true
 use_skills_sync: true
+use_shared_agents: true
