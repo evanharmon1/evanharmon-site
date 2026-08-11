@@ -50,9 +50,14 @@ tasks:
     # a PR to catch everything CI would, on demand, without waiting on a PR run.
     # Builds on `verify` and adds the devcontainer permission assertion plus the
     # heavier security checks.
-    desc: Full CI mirror (verify → test:devcontainer:permissions → security)
+    desc: Full CI mirror (verify → test:e2e → verify:skills → test:devcontainer:permissions → security)
     cmds:
       - task: verify
+      # The port-binding tier. Kept out of `verify` so parallel agents and
+      # worktrees never contend on a port; `ci` is on-demand, so it belongs here
+      # and in the build workflow's runner-isolated `e2e` job — nowhere else.
+      - task: test:e2e
+      - task: verify:skills
       - task: test:devcontainer:permissions
       - task: security
 
@@ -74,10 +79,15 @@ tasks:
       - task: test:registry-docs
       - task: test:tasks
       - task: test:ci-results
+      - task: test:status
+      - task: test:meta-install
       - task: test:codex-review
       - task: test:lint-hygiene
       - task: test:release-title
+      - task: test:setup-github-project
+      - task: test:sync-devkit-release
       - task: test:hooks
+      - task: test:statusline
       - task: test
 
   # ── Quality Checks ────────────────────────────────────────────
@@ -413,6 +423,21 @@ tasks:
     cmds:
       - ./scripts/test-meta-install.sh
 
+  test:setup-github-project:
+    desc: Unit-test the GitHub Project field reconciliation (stubbed gh, no network)
+    cmds:
+      - ./scripts/test-setup-github-project.sh
+
+  test:sync-devkit-release:
+    desc: "Unit-test the harmon-devkit release→sync-PR automation (offline, stubbed gh/task)"
+    cmds:
+      - ./scripts/test-sync-devkit-release.sh
+
+  test:statusline:
+    desc: Unit-test the devcontainer status line renderer (no container needed)
+    cmds:
+      - ./scripts/test-statusline.sh
+
   test:codex-review:
     desc: Unit-test codex-review.sh target selection (offline, stubbed codex)
     cmds:
@@ -449,17 +474,27 @@ tasks:
       - ./scripts/test-hooks.sh
 
   test:e2e:
-    desc: Run Playwright end-to-end tests
+    # The PORT-BINDING test tier: Playwright serves the app. Deliberately NOT in
+    # `check` / `test` / `verify` — those stay port-free so parallel agents and
+    # worktrees never fight over a port. It runs in `task ci` and in the build
+    # workflow's `e2e` job, both of which are on-demand or runner-isolated.
+    #
+    # BUILD CONTRACT — this task never builds: `task ci` runs verify (which runs
+    # `build`) first, so dist/ is already there when Playwright's webServer
+    # previews it. A direct run relies on playwright.config.ts's `webServer`.
+    #
+    # The runner is scripts/e2e-run.sh, which skips cleanly until the app ships
+    # a playwright.config.*, then runs the FAIL-CLOSED scripts/e2e-env-guard.sh,
+    # installs browsers to match the CI job, and excludes the @a11y specs (a
+    # separate, deliberately non-blocking tier). Never inline `npx playwright
+    # test` here again — that bypasses all four.
+    desc: Run Playwright end-to-end tests (serves the app — binds a port)
     # Local dev secrets (if any) come from .env.local; CI passes env via the
     # workflow instead. A missing file is ignored.
     dotenv:
       - .env.local
     cmds:
-      # Fail closed: refuse to run e2e with production-capable credentials or
-      # targets in the environment. The guard fails until configured for this
-      # app's providers — see scripts/e2e-env-guard.sh.
-      - ./scripts/e2e-env-guard.sh
-      - npx playwright test {{.CLI_ARGS}}
+      - ./scripts/e2e-run.sh {{.CLI_ARGS}}
 
   test:e2e:screenshot:
     desc: "Playwright screenshot (usage: task test:e2e:screenshot -- <url> <output.png>)"
