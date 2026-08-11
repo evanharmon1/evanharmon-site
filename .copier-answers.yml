@@ -1,16 +1,14 @@
 # Changes here will be overwritten by Copier
-_commit: 4c457f195a22d38366b9ad9302431a32a516e210
+_commit: d03c76f5cbf63982b5941b68a73561e2a84fbc92
 _src_path: https://github.com/evanharmon1/harmon-init
 bunch_add: false
 ci_runner: ubuntu-latest
 claude_authorized_members: evanharmon1
 code_owner: evanharmon1
 codeql_languages:
-- javascript-typescript
-- python
+  - javascript-typescript
 deploy_cloudflare_workers: true
 devcontainer: true
-use_alternative_claude_providers: true
 git_init: false
 github_org: evanharmon1
 github_release_init: false
@@ -27,14 +25,16 @@ project_type: web-astro
 release_content_paths: ''
 run_task_install: false
 skill_categories:
-- universal
-- frontend
+  - universal
+  - frontend
 snyk_scan_schedule: weekly
+use_alternative_claude_providers: true
+use_antigravity_cli: false
 use_codeql: true
-use_codex_review: true
-use_codex_cloud_review: true
 use_coderabbit: false
+use_codex_cloud_review: true
+use_codex_review: true
 use_foreman: true
 use_release_please: true
-use_skills_sync: true
 use_shared_agents: true
+use_skills_sync: true

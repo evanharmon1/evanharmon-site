@@ -9,7 +9,8 @@ output:
 
 includes:
   # Foreman — deterministic supervisor for milestone-driven agent dispatch
-  # (task foreman:plan / dispatch / shepherd / watch ...; docs/architecture/foreman.md)
+  # (task foreman:plan / dispatch / shepherd / watch ...; the CLI is pinned
+  # and fetched via uvx in taskfiles/foreman.yml)
   foreman: taskfiles/foreman.yml
 
 # ── Entry Points ───────────────────────────────────────────────────
@@ -49,9 +50,14 @@ tasks:
     # a PR to catch everything CI would, on demand, without waiting on a PR run.
     # Builds on `verify` and adds the devcontainer permission assertion plus the
     # heavier security checks.
-    desc: Full CI mirror (verify → test:devcontainer:permissions → security)
+    desc: Full CI mirror (verify → test:e2e → verify:skills → test:devcontainer:permissions → security)
     cmds:
       - task: verify
+      # The port-binding tier. Kept out of `verify` so parallel agents and
+      # worktrees never contend on a port; `ci` is on-demand, so it belongs here
+      # and in the build workflow's runner-isolated `e2e` job — nowhere else.
+      - task: test:e2e
+      - task: verify:skills
       - task: test:devcontainer:permissions
       - task: security
 
@@ -63,14 +69,25 @@ tasks:
     desc: Definition-of-done gate (check → build → validate → guards → test)
     cmds:
       - task: check
+      - task: audit:agent-instructions
+      - task: test:agent-instructions-size
+      - task: test:agent-skill-links
       - task: build
       - task: validate
+      - task: test:agent-registry
+      - task: test:registry-drift
+      - task: test:registry-docs
       - task: test:tasks
       - task: test:ci-results
+      - task: test:status
+      - task: test:meta-install
       - task: test:codex-review
+      - task: test:lint-hygiene
       - task: test:release-title
-      - task: foreman:test
+      - task: test:setup-github-project
+      - task: test:sync-devkit-release
       - task: test:hooks
+      - task: test:statusline
       - task: test
 
   # ── Quality Checks ────────────────────────────────────────────
@@ -81,6 +98,11 @@ tasks:
     deps:
       - lint
       - lint:typescript
+
+  audit:agent-instructions:
+    desc: Warn when AGENTS.md exceeds Codex's default 32 KiB discovery budget
+    cmds:
+      - ./scripts/check-agent-instructions-size.sh AGENTS.md
 
   lint:
     desc: Run all linters in parallel
@@ -93,7 +115,6 @@ tasks:
       - lint:prettier
       - lint:eslint
       - lint:design
-      - foreman:lint
 
   lint:design:
     desc: Validate the Almanac design system (canonical files, semantic tokens, token contrast)
@@ -232,6 +253,11 @@ tasks:
           exit 1
         fi
 
+  test:agent-skill-links:
+    desc: Unit-test migration-safe Claude-to-.agents skill compatibility links
+    cmds:
+      - ./scripts/test-agent-skill-links.sh
+
   # ── Skills sync ────────────────────────────────────────────────
   # Vendor shared agent skills from harmon-devkit, pinned in .skills-sync.yaml.
   # The verify:skills* drift checks skip cleanly until the first `task sync:skills`,
@@ -240,15 +266,28 @@ tasks:
     desc: Vendor the pinned skill categories from harmon-devkit into .claude/skills
     cmds:
       - ./scripts/sync-skills.sh sync
+      - ./scripts/link-agent-skills.sh sync
+
+  # Entry point for .github/workflows/sync-harmon-devkit.yml: resolves the
+  # latest harmon-devkit release, bumps .skills-sync.yaml, vendors, verifies
+  # offline, and opens/updates ONE rolling bot/sync-harmon-devkit PR.
+  # Never merges anything. `{{.CLI_ARGS}}` passes an explicit tag for the
+  # manual recovery path (`task sync:devkit-release -- vX.Y.Z`).
+  sync:devkit-release:
+    desc: "Pin the latest harmon-devkit release, vendor it, verify, and open/update the sync PR"
+    cmds:
+      - ./scripts/sync-devkit-release.sh run {{.CLI_ARGS}}
 
   verify:skills:
     desc: "Skill drift check (network): fail if vendored skills differ from the pinned ref"
     cmds:
+      - ./scripts/link-agent-skills.sh verify
       - ./scripts/sync-skills.sh verify
 
   verify:skills:offline:
     desc: "Fast offline check that the vendored ref matches the manifest (no network)"
     cmds:
+      - ./scripts/link-agent-skills.sh verify
       - ./scripts/sync-skills.sh verify-offline
 
   format:
@@ -332,6 +371,38 @@ tasks:
           echo "TODO: wire tests — scaffold the framework first (see docs/CHECKLIST.md and docs/architecture/tests.md)"
         fi
 
+  test:agent-registry:
+    desc: Schema-check the machine-readable agent registry and its cross-record invariants
+    cmds:
+      - ./scripts/test-agent-registry.sh
+
+  test:agent-instructions-size:
+    desc: Unit-test the non-blocking AGENTS.md size advisory
+    cmds:
+      - ./scripts/test-agent-instructions-size.sh
+
+  test:registry-drift:
+    desc: Bind label provisioning, provider wrappers, and Foreman adapters to the agent registry (offline drift gate)
+    cmds:
+      - ./scripts/test-registry-drift.sh
+
+  test:registry-docs:
+    # The answers-file name is configurable (`copier copy --answers-file …`),
+    # and the check reads project_management out of it to know whether this
+    # repo renders the GitHub Projects document at all. The script is a
+    # verbatim twin of harmon-init's own, so the name is passed in rather than
+    # templated into it — as an ENV value, not a command argument: a filename
+    # containing an apostrophe would terminate a quoted shell argument early.
+    # `tojson` emits a JSON string, which is also a valid YAML double-quoted
+    # scalar, so quotes and backslashes in the name survive both layers. The
+    # `string` filter first because copier hands this over as a PurePosixPath,
+    # which `tojson` cannot serialize.
+    desc: Bind the published family/harness tables in docs/project-management.md to the agent registry
+    env:
+      COPIER_ANSWERS_FILE: ".copier-answers.yml"
+    cmds:
+      - ./scripts/test-registry-docs.sh
+
   test:tasks:
     desc: Guard the Taskfile itself (compiles; setup tasks are safe no-ops)
     cmds:
@@ -342,10 +413,40 @@ tasks:
     cmds:
       - ./scripts/test-ci-results.sh
 
+  test:status:
+    desc: Unit-test the status board-writes + local-credential checks (stubbed CLIs, no network)
+    cmds:
+      - ./scripts/test-status.sh
+
+  test:meta-install:
+    desc: Unit-test the .meta sidecar installer's ~-expansion and refusals
+    cmds:
+      - ./scripts/test-meta-install.sh
+
+  test:setup-github-project:
+    desc: Unit-test the GitHub Project field reconciliation (stubbed gh, no network)
+    cmds:
+      - ./scripts/test-setup-github-project.sh
+
+  test:sync-devkit-release:
+    desc: "Unit-test the harmon-devkit release→sync-PR automation (offline, stubbed gh/task)"
+    cmds:
+      - ./scripts/test-sync-devkit-release.sh
+
+  test:statusline:
+    desc: Unit-test the devcontainer status line renderer (no container needed)
+    cmds:
+      - ./scripts/test-statusline.sh
+
   test:codex-review:
     desc: Unit-test codex-review.sh target selection (offline, stubbed codex)
     cmds:
       - ./scripts/test-codex-review.sh
+
+  test:lint-hygiene:
+    desc: Behavioral fixtures for lint-hygiene's trigger-phrase adjacency scan
+    cmds:
+      - ./scripts/test-lint-hygiene.sh
 
   test:release-title:
     desc: Unit-test the release-content title guard (require-release-title.sh)
@@ -373,17 +474,27 @@ tasks:
       - ./scripts/test-hooks.sh
 
   test:e2e:
-    desc: Run Playwright end-to-end tests
+    # The PORT-BINDING test tier: Playwright serves the app. Deliberately NOT in
+    # `check` / `test` / `verify` — those stay port-free so parallel agents and
+    # worktrees never fight over a port. It runs in `task ci` and in the build
+    # workflow's `e2e` job, both of which are on-demand or runner-isolated.
+    #
+    # BUILD CONTRACT — this task never builds: `task ci` runs verify (which runs
+    # `build`) first, so dist/ is already there when Playwright's webServer
+    # previews it. A direct run relies on playwright.config.ts's `webServer`.
+    #
+    # The runner is scripts/e2e-run.sh, which skips cleanly until the app ships
+    # a playwright.config.*, then runs the FAIL-CLOSED scripts/e2e-env-guard.sh,
+    # installs browsers to match the CI job, and excludes the @a11y specs (a
+    # separate, deliberately non-blocking tier). Never inline `npx playwright
+    # test` here again — that bypasses all four.
+    desc: Run Playwright end-to-end tests (serves the app — binds a port)
     # Local dev secrets (if any) come from .env.local; CI passes env via the
     # workflow instead. A missing file is ignored.
     dotenv:
       - .env.local
     cmds:
-      # Fail closed: refuse to run e2e with production-capable credentials or
-      # targets in the environment. The guard fails until configured for this
-      # app's providers — see scripts/e2e-env-guard.sh.
-      - ./scripts/e2e-env-guard.sh
-      - npx playwright test {{.CLI_ARGS}}
+      - ./scripts/e2e-run.sh {{.CLI_ARGS}}
 
   test:e2e:screenshot:
     desc: "Playwright screenshot (usage: task test:e2e:screenshot -- <url> <output.png>)"
@@ -658,6 +769,11 @@ tasks:
     desc: GitHub status section
     cmds:
       - ./scripts/status.sh gh
+
+  status:creds:
+    desc: Local credential section (gh, Codex, Claude Code logins — local probes, no network)
+    cmds:
+      - ./scripts/status.sh creds
 
   status:code:
     desc: Codebase stats section

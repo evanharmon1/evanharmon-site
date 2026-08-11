@@ -1,22 +1,39 @@
-# Foreman configuration for Evan Harmon Website (docs/architecture/foreman.md).
+# Foreman configuration for Evan Harmon Website — read by the pinned Foreman
+# CLI (taskfiles/foreman.yml; https://github.com/ponderousdev/foreman).
 #
-# Issue custom fields are org-only: on an org-owned repo `inputs = "auto"`
-# resolves to fields mode (`foreman`, `foreman-budget-usd`,
-# `foreman-timeout-min`); on a personal-account repo it falls back to labels
-# (`foreman:claude`, `foreman:hold`, ...). Explicit approval is required
-# before any issue is dispatchable.
+# Arming is label mode (`foreman:claude`, `foreman:hold`, ...): D13 needs a
+# trusted, timeline-attributable arming actor, and GitHub exposes no actor
+# for issue-field changes — fields mode fails closed by design, so it is
+# never selected here (`auto` would pick it on any org with issue fields).
+# Explicit approval is required before any issue is dispatchable.
+#
+# NOTE (D4): on a PUBLIC repository foreman classifies every unit as
+# requiring the `untrusted-input` boundary, which the local runner never
+# provides — dispatch refuses by design until an isolated runner ships in a
+# FUTURE foreman release (sprite/docker are named in config but not yet
+# implemented). plan / vet / status / preflight remain fully usable.
 
+# Where units execute: local today; sprite and docker are roadmap names.
+runner = "local"
 backend = "claude"
 require_approval = true
-inputs = "auto"
-verify_command = ["task", "ci"]
+inputs = "labels"
 max_parallel = 3
 branch_prefix = "foreman"
+# Identity asserted before any write.
 expected_login = "evanharmon1-bot"
 
-# Only these GitHub logins, trusted author associations, and Foreman's own
-# account may contribute unresolved review-thread content to agent prompts.
-review_sender_trust = ["coderabbitai", "Copilot"]
+# Accounts (humans and apps) whose content and arming events are trusted:
+# who may arm an issue, and whose review/comment content may be embedded in
+# agent prompts. Empty = nobody is trusted (fail closed). App accounts are
+# spelled with the `[bot]` suffix. A configured `[reviewer]` login belongs in
+# this list — requiring review evidence whose content cannot be embedded
+# would wedge shepherding on unadjudicatable findings.
+trusted_actors = ["evanharmon1", "evanharmon1-bot", "Copilot", "chatgpt-codex-connector[bot]"]
+
+# Hard capability requirements: the baseline gate cannot run without these;
+# a mismatch is refused before dispatch.
+required_capabilities = []
 
 # subscription (default): adapters inherit CLAUDE_CODE_OAUTH_TOKEN; USD
 # budgets are inert (guardrails bind on timeout/turns). api: adapters export
@@ -28,6 +45,21 @@ billing = "subscription"
 # conservative for any other host.
 sandboxed = false
 
+# NOTE: [verify] must stay below every top-level key — in TOML, keys after a
+# section header belong to that section until the next header.
+#
+# The composed verify gate: `default` runs in every unit; capability-keyed
+# entries (docker, ports, untrusted-input) run additionally where the
+# capability is present. Whatever does not run in-unit is CI's job.
+# `task ci` includes the port-binding `test:e2e` tier, while `task verify` is
+# port-free by design (docs/architecture/tests.md). With max_parallel > 1 that
+# matters only once this app ships a playwright.config.* — before then test:e2e
+# skips, so nothing binds a port. When you add the e2e suite, pick one: point
+# [verify] default at ["task", "verify"], drop max_parallel to 1, or give the
+# Playwright config a per-worktree port.
+[verify]
+default = ["task", "ci"]
+
 [budgets]
 dispatch_usd = 20.0
 shepherd_usd = 10.0
@@ -35,3 +67,15 @@ shepherd_usd = 10.0
 [timeouts]
 dispatch_min = 90
 shepherd_min = 30
+
+# Current-head reviewer gate (foreman >= 2.2.0): the same `@codex review`
+# contract the shepherd stage documents in AGENTS.md — fail-closed, bounded
+# attempts, evidence bound to the current head. Success is an APPROVED review
+# at the head or a thumbs-up from `login` on foreman's own request comment;
+# missing, stale, pending, contradictory, or unreadable evidence blocks
+# promotion.
+[reviewer]
+login = "chatgpt-codex-connector[bot]"
+request = "@codex review"
+timeout_min = 15
+max_attempts = 2

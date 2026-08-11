@@ -20,10 +20,19 @@
   // container has no Tailscale feature installed, and we don't want a tailnet
   // auth key sitting in its env-file. init-env.sh will strip any stale
   // TS_AUTHKEY entry on every rebuild.
-  "initializeCommand": "bash .devcontainer/scripts/init-env.sh .devcontainer/devcontainer.env GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_DECK_TELEGRAM_KEY",
+  // Alternative-model provider keys (KIMI/DEEPSEEK/ZAI) are opt-in via
+  // use_alternative_claude_providers; when on they land in this env-file too,
+  // so a headless/bypass bot can read them — a deliberate posture extension.
+  "initializeCommand": "bash .devcontainer/scripts/init-env.sh .devcontainer/devcontainer.env GH_TOKEN FOREMAN_AGENT_GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_DECK_TELEGRAM_KEY KIMI_API_KEY MOONSHOT_API_KEY DEEPSEEK_API_KEY ZAI_API_KEY QWEN_API_KEY",
   "runArgs": [
     "--init",
     "--shm-size=2g",
+    // Linux hosts don't resolve host.docker.internal by default (unlike Docker
+    // Desktop on mac/win/WSL2); this mapping makes it resolve everywhere,
+    // which claude-qwen-local() (.devcontainer/config/claude-providers.sh)
+    // relies on to reach an Ollama/LM Studio endpoint on the host. Supported
+    // since Docker 20.10, harmless where the platform already resolves it.
+    "--add-host=host.docker.internal:host-gateway",
     "--env-file",
     ".devcontainer/devcontainer.env"
   ],
@@ -34,17 +43,17 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "dockerDashComposeVersion": "v2"
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {},
     // No 1Password CLI in the bot profile — this container must hold no path
     // to production secrets (docs/guides/devcontainers.md). The human dev
     // profile (.devcontainer/dev/) keeps its own op feature.
-    "ghcr.io/devcontainers-extra/features/go-task:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "mounts": [
     "source=claude-code-config-evanharmon1-evanharmon-site,target=/home/vscode/.claude,type=volume",
     "source=codex-config-evanharmon1-evanharmon-site,target=/home/vscode/.codex,type=volume",
     "source=gemini-config-evanharmon1-evanharmon-site,target=/home/vscode/.gemini,type=volume",
     "source=agent-deck-config-evanharmon1-evanharmon-site,target=/home/vscode/.agent-deck,type=volume",
+    "source=herdr-config-evanharmon1-evanharmon-site,target=/home/vscode/.config/herdr,type=volume",
     "source=shell-history-evanharmon1-evanharmon-site,target=/home/vscode/.shell-history,type=volume",
     "source=zoxide-data-evanharmon1-evanharmon-site,target=/home/vscode/.local/share/zoxide,type=volume"
   ],
@@ -54,14 +63,11 @@
   // when the host shell doesn't export them, which overrides the env-file
   // values (Docker --env takes precedence over --env-file).
   //
-  // CLAUDE_CODE_EFFORT_LEVEL: default Claude Code thinking effort. Set here
-  // (not in settings.json) because Claude Code's settings schema only accepts
-  // low|medium|high for the persisted effortLevel field, while the env var
-  // accepts low|medium|high|max. Resolution order at runtime: env var >
-  // settings.json effortLevel > model default.
+  // FOREMAN_DEVCONTAINER: foreman's D2 startup tripwire — it refuses to run
+  // anywhere this marker is not "bot" (only the bot profile sets it).
   "containerEnv": {
     "CODER": "${localEnv:CODER}",
-    "CLAUDE_CODE_EFFORT_LEVEL": "max"
+    "FOREMAN_DEVCONTAINER": "bot"
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "postStartCommand": "bash .devcontainer/post-start.sh",
