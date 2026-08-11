@@ -10,6 +10,12 @@ bash .devcontainer/scripts/post-create-common.sh
 # the container is the isolation boundary. The dev profile deliberately omits
 # this so a human gets the normal prompt-on-action default.
 bash .devcontainer/scripts/enable-claude-bypass.sh
+bash .devcontainer/scripts/enable-codex-bypass.sh
+bash .devcontainer/scripts/enable-codex-bypass.sh
+
+# An earlier template version may have enabled the opt-in. Restore its recorded
+# policy values when this answer is turned off; this is a no-op otherwise.
+bash /usr/local/share/devcontainer-config/apply-antigravity-settings.sh restore
 
 # Install repo-managed git hooks (source of truth: .devcontainer/hooks/).
 # This replaces the default git-lfs hooks with versions that also handle

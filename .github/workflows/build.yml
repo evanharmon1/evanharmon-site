@@ -41,8 +41,13 @@ jobs:
       - name: Lint + typecheck
         run: task check
       - run: task test:tasks
+      - run: task test:agent-registry
+      - run: task test:registry-drift
+      - run: task test:registry-docs
       - run: task test:codex-review
       - run: task test:ci-results
+      - run: task test:status
+      - run: task test:lint-hygiene
       - run: task test:release-title
       - run: task foreman:test
       - name: Skills drift check (vendored skills vs pinned harmon-devkit ref)

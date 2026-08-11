@@ -22,13 +22,53 @@ fi
 ENV_FILE="${1:-.devcontainer/devcontainer.env}"
 shift || true
 
-# All vars this script knows how to manage. Anything in this list but
-# NOT in the per-profile allow-list below is considered forbidden and is
-# unconditionally stripped from the env-file on every run.
-# ANTHROPIC_API_KEY is in the managed list so the eviction loop strips it from
-# the env-file if it ever lands there — it must never be allowed into the
-# container since it silently overrides CLAUDE_CODE_OAUTH_TOKEN.
-ALL_MANAGED_VARS=(TS_AUTHKEY GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_DECK_TELEGRAM_KEY ANTHROPIC_API_KEY)
+# This script controls two things about the env-file: which vars it INJECTS
+# (from the host env, per the profile's allow-list) and which it EVICTS (strips
+# when disallowed). The env-file is actively-managed runtime state, NOT user
+# data — TS_AUTHKEY is evicted from the bot profile, ANTHROPIC_API_KEY is always
+# stripped — so this is secret hygiene, not a mutation of user-owned files (the
+# values themselves live in 1Password; the env-file is only a projection). Vars
+# the script does NOT recognize are left untouched, so a value an opted-out repo
+# populates out-of-band (e.g. an app's own DEEPSEEK_API_KEY) survives rebuilds.
+#
+# The var sets are split by purpose, not merged into one:
+#   BASE_MANAGED_VARS    — always-on secrets every profile may carry. These form
+#                          the implicit default allow-list (the no-arg fallback)
+#                          and are evicted when a profile disallows them.
+#   ANTHROPIC_API_KEY    — recognized only to be stripped. It silently overrides
+#                          CLAUDE_CODE_OAUTH_TOKEN, so it must never reach the
+#                          container: never allow-listed, always evicted.
+#   OPT_IN_PROVIDER_KEYS — alt-model keys (use_alternative_claude_providers).
+#                          They are INJECTION-controlled only: an opted-in
+#                          profile's initializeCommand passes them (so they're
+#                          injected from the host env); an opted-out one doesn't
+#                          (so they're never injected). They are deliberately NOT
+#                          evicted when disallowed, so an opted-out repo that
+#                          uses a same-named var as an unrelated application
+#                          secret does NOT silently lose it on every rebuild. The
+#                          load-bearing control is injection: a no-arg or
+#                          opted-out invocation never writes paid opt-in
+#                          credentials into a default-off repo's env-file, and a
+#                          revoked opt-in stops injecting them. The trade-off is
+#                          that a stale provider key already in the env-file when
+#                          the opt-in is revoked is NOT auto-evicted — it lingers
+#                          until cleared manually. That is a least-privilege nit,
+#                          not a leak: the key stays safe in 1Password and the
+#                          env-file is host-local and gitignored.
+# FOREMAN_AGENT_GH_TOKEN is the separate READ-ONLY PAT foreman hands to
+# dispatched agents as their GH_TOKEN (required before any dispatch); only
+# the bot profile allow-lists it, so it is evicted from dev/ like GH_TOKEN.
+BASE_MANAGED_VARS=(TS_AUTHKEY GH_TOKEN FOREMAN_AGENT_GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_DECK_TELEGRAM_KEY)
+OPT_IN_PROVIDER_KEYS=(KIMI_API_KEY MOONSHOT_API_KEY DEEPSEEK_API_KEY ZAI_API_KEY QWEN_API_KEY)
+# KNOWN_VARS: every var this script recognizes. The filter below restricts the
+# caller's allow-list to this set, so a positional arg can't smuggle an unknown
+# var into the env-file. Includes the opt-in keys so an opted-in profile can
+# inject them.
+KNOWN_VARS=("${BASE_MANAGED_VARS[@]}" ANTHROPIC_API_KEY "${OPT_IN_PROVIDER_KEYS[@]}")
+# EVICT_VARS: vars stripped from the env-file when not in the profile's
+# allow-list. The opt-in provider keys are intentionally absent (see above) so an
+# opted-out repo keeps any same-named value it set independently.
+EVICT_VARS=("${BASE_MANAGED_VARS[@]}" ANTHROPIC_API_KEY)
 
 # Vars this profile is allowed to populate. Caller passes the allow-list
 # as additional args after the env-file path. With no extra args we
