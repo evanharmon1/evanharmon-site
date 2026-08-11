@@ -258,6 +258,16 @@ tasks:
       - ./scripts/sync-skills.sh sync
       - ./scripts/link-agent-skills.sh sync
 
+  # Entry point for .github/workflows/sync-harmon-devkit.yml: resolves the
+  # latest harmon-devkit release, bumps .skills-sync.yaml, vendors, verifies
+  # offline, and opens/updates ONE rolling bot/sync-harmon-devkit PR.
+  # Never merges anything. `{{.CLI_ARGS}}` passes an explicit tag for the
+  # manual recovery path (`task sync:devkit-release -- vX.Y.Z`).
+  sync:devkit-release:
+    desc: "Pin the latest harmon-devkit release, vendor it, verify, and open/update the sync PR"
+    cmds:
+      - ./scripts/sync-devkit-release.sh run {{.CLI_ARGS}}
+
   verify:skills:
     desc: "Skill drift check (network): fail if vendored skills differ from the pinned ref"
     cmds:

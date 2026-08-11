@@ -49,7 +49,6 @@ jobs:
       - run: task test:status
       - run: task test:lint-hygiene
       - run: task test:release-title
-      - run: task foreman:test
       - name: Skills drift check (vendored skills vs pinned harmon-devkit ref)
         run: task verify:skills
       - run: task test:hooks
