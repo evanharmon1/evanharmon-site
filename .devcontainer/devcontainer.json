@@ -43,17 +43,17 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "dockerDashComposeVersion": "v2"
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {},
     // No 1Password CLI in the bot profile — this container must hold no path
     // to production secrets (docs/guides/devcontainers.md). The human dev
     // profile (.devcontainer/dev/) keeps its own op feature.
-    "ghcr.io/devcontainers-extra/features/go-task:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "mounts": [
     "source=claude-code-config-evanharmon1-evanharmon-site,target=/home/vscode/.claude,type=volume",
     "source=codex-config-evanharmon1-evanharmon-site,target=/home/vscode/.codex,type=volume",
     "source=gemini-config-evanharmon1-evanharmon-site,target=/home/vscode/.gemini,type=volume",
     "source=agent-deck-config-evanharmon1-evanharmon-site,target=/home/vscode/.agent-deck,type=volume",
+    "source=herdr-config-evanharmon1-evanharmon-site,target=/home/vscode/.config/herdr,type=volume",
     "source=shell-history-evanharmon1-evanharmon-site,target=/home/vscode/.shell-history,type=volume",
     "source=zoxide-data-evanharmon1-evanharmon-site,target=/home/vscode/.local/share/zoxide,type=volume"
   ],

@@ -71,14 +71,14 @@ KNOWN_VARS=("${BASE_MANAGED_VARS[@]}" ANTHROPIC_API_KEY "${OPT_IN_PROVIDER_KEYS[
 EVICT_VARS=("${BASE_MANAGED_VARS[@]}" ANTHROPIC_API_KEY)
 
 # Vars this profile is allowed to populate. Caller passes the allow-list
-# as additional args after the env-file path. With no extra args we
-# default to all known vars except ANTHROPIC_API_KEY, which must never
-# be allowed into the container (it silently overrides CLAUDE_CODE_OAUTH_TOKEN).
+# as additional args after the env-file path. With no extra args we default to
+# the always-on base vars only — ANTHROPIC_API_KEY (never allowed) and the opt-in
+# provider keys (only when the caller passes them) are excluded, so the no-arg
+# fallback evicts them rather than injecting them.
 if [ "$#" -gt 0 ]; then
     ALLOWED_VARS=("$@")
 else
-    # Safe default: all managed vars; ANTHROPIC_API_KEY is filtered below.
-    ALLOWED_VARS=("${ALL_MANAGED_VARS[@]}")
+    ALLOWED_VARS=("${BASE_MANAGED_VARS[@]}")
 fi
 
 contains() {
@@ -91,13 +91,13 @@ contains() {
     return 1
 }
 
-# Restrict ALLOWED_VARS to the intersection with ALL_MANAGED_VARS, and strip
+# Restrict ALLOWED_VARS to the intersection with KNOWN_VARS, and strip
 # ANTHROPIC_API_KEY unconditionally. A caller cannot smuggle an unknown var
 # into the env-file by passing it as a positional arg.
 FILTERED_ALLOWED_VARS=()
 for var in "${ALLOWED_VARS[@]}"; do
     [ "$var" = "ANTHROPIC_API_KEY" ] && continue
-    if contains "$var" "${ALL_MANAGED_VARS[@]}"; then
+    if contains "$var" "${KNOWN_VARS[@]}"; then
         FILTERED_ALLOWED_VARS+=("$var")
     fi
 done
@@ -116,11 +116,12 @@ strip_var() {
     mv "$tmp" "$2"
 }
 
-# Strip any forbidden var (managed by the script but not in this
-# profile's allow-list). This guarantees, for example, that the bot
-# profile evicts TS_AUTHKEY even if a stale value was written to the
-# env-file by an earlier rebuild.
-for var in "${ALL_MANAGED_VARS[@]}"; do
+# Strip any forbidden var (in EVICT_VARS but not in this profile's allow-list).
+# This guarantees, for example, that the bot profile evicts TS_AUTHKEY even if a
+# stale value was written to the env-file by an earlier rebuild. The opt-in
+# provider keys are not in EVICT_VARS, so an opted-out repo keeps any same-named
+# value it set independently.
+for var in "${EVICT_VARS[@]}"; do
     if ! contains "$var" "${ALLOWED_VARS[@]}"; then
         strip_var "$var" "$ENV_FILE"
     fi
@@ -129,10 +130,45 @@ done
 # For allowed vars, replace any stale entry with the current host value.
 # Vars not present in the host env are left untouched, so values
 # populated out-of-band (e.g. from 1Password) survive rebuilds.
+#
+# A var missing from BOTH the host env and the env-file is a different case: it
+# is not an out-of-band value being preserved, it is a value nothing will
+# supply. Silence there is how a missing TS_AUTHKEY went unnoticed for hours in
+# a Coder workspace — the container came up fine and only the Tailscale-
+# dependent step failed, far from the cause. So collect those and warn on
+# stderr below.
+#
+# The loop is over ALLOWED_VARS — the post-filter allow-list — NOT over
+# BASE_MANAGED_VARS or EVICT_VARS. That is load-bearing for the profile
+# boundary, not just tidiness: the bot profile deliberately omits TS_AUTHKEY
+# (no tailnet path from a bypassPermissions container), so warning from the
+# managed set would print "TS_AUTHKEY missing" on every bot rebuild —
+# advertising a credential that profile must never hold, and training the
+# reader to expect one. A var this profile is not allowed to populate is not
+# missing; it is correctly absent.
+missing=""
 for var in "${ALLOWED_VARS[@]}"; do
     val="${!var:-}"
     if [ -n "$val" ]; then
         strip_var "$var" "$ENV_FILE"
         echo "${var}=${val}" >>"$ENV_FILE"
+    elif ! grep -q "^${var}=." "$ENV_FILE"; then
+        # `=.` requires at least one character after the `=`: a bare "VAR="
+        # line (or a host var exported empty, which "${!var:-}" already treats
+        # as unset) leaves the container with no usable value, so it warns the
+        # same as a wholly absent one. Var names come from KNOWN_VARS, so they
+        # carry no regex metacharacters.
+        missing="${missing:+$missing }${var}"
     fi
 done
+
+# Names only, never values — this lands in build logs. Non-fatal by design: a
+# rebuild must not be blocked by an optional secret, and this script runs as
+# initializeCommand on the HOST, where a non-zero exit aborts the whole
+# container build.
+if [ -n "$missing" ]; then
+    echo "init-env.sh: warning: allow-listed but unset in the host env and absent from ${ENV_FILE}:" >&2
+    echo "init-env.sh:   ${missing}" >&2
+    echo "init-env.sh: the container will start without them. On Coder/Codespaces set them as" >&2
+    echo "init-env.sh: workspace/repo secrets; locally populate the env-file from 1Password." >&2
+fi

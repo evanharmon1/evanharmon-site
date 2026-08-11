@@ -1,7 +1,7 @@
 {
   // Local dev profile.
   // This intentionally omits the root profile's containerEnv block because the
-  // local runArgs env-file already provides TS_AUTHKEY and GH_TOKEN.
+  // local runArgs env-file already provides TS_AUTHKEY.
   "name": "DEV - devcontainer-evanharmon-site",
   "containerName": "devcontainer-evanharmon-site-dev",
   // Minimum to run the intended workload (Playwright + agents). Codespaces
@@ -53,7 +53,6 @@
     },
     "ghcr.io/tailscale/codespace/tailscale": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers-extra/features/go-task:1": {},
     "ghcr.io/itsmechlark/features/1password:1.5.0": {}
   },
   "mounts": [
@@ -61,6 +60,7 @@
     "source=codex-config-evanharmon1-evanharmon-site-dev,target=/home/vscode/.codex,type=volume",
     "source=gemini-config-evanharmon1-evanharmon-site-dev,target=/home/vscode/.gemini,type=volume",
     "source=agent-deck-config-evanharmon1-evanharmon-site-dev,target=/home/vscode/.agent-deck,type=volume",
+    "source=herdr-config-evanharmon1-evanharmon-site-dev,target=/home/vscode/.config/herdr,type=volume",
     "source=shell-history-evanharmon1-evanharmon-site-dev,target=/home/vscode/.shell-history,type=volume",
     "source=zoxide-data-evanharmon1-evanharmon-site-dev,target=/home/vscode/.local/share/zoxide,type=volume"
   ],
