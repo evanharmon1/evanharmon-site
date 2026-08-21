@@ -4,10 +4,10 @@ Evan Harmon Website ships a **dual-profile** devcontainer. Both profiles share
 one `Dockerfile` and the baked `.devcontainer/config/` tree; they differ in
 which secrets and capabilities they allow.
 
-| Profile | Path | For | Tailscale |
-|---|---|---|---|
-| **Bot** | `.devcontainer/devcontainer.json` | AI agents (Claude Code, Codex, Gemini) | no |
-| **Dev** | `.devcontainer/dev/devcontainer.json` | humans | yes (`TS_AUTHKEY`, `--device=/dev/net/tun`) |
+| Profile | Path | For | GitHub auth | Tailscale |
+|---|---|---|---|---|
+| **Bot** | `.devcontainer/devcontainer.json` | AI agents (Claude Code, Codex, Gemini, OpenCode) | the bot's PAT via `GH_TOKEN` | no |
+| **Dev** | `.devcontainer/dev/devcontainer.json` | humans | the operator's own `gh auth login` | yes (`TS_AUTHKEY`, `--device=/dev/net/tun`) |
 
 The bot profile intentionally omits `TS_AUTHKEY` from its allow-list so a tailnet
 key never reaches an agent container.
@@ -19,15 +19,6 @@ default so a human stays in the loop. The shared managed settings
 (`config/claude-settings.json`) deliberately omit `defaultMode`; the bot opts in
 at create time via `scripts/enable-claude-bypass.sh`. `bypassPermissions` is only
 safe because it is container-scoped — it is never set on the host.
-
-**Codex follows the same split.** Both profiles default to `gpt-5.6-sol` with
-medium reasoning and a 64 KiB project-instruction budget. The **dev** profile
-uses `workspace-write`, `on-request`, and Auto-review: the sandbox defines the
-writable boundary, while eligible exits from it are reviewed automatically.
-The **bot** changes the managed config to `danger-full-access` plus `never`, so
-there is no nested sandbox or interactive prompt inside Docker. Repository
-instructions, hooks, GitHub token scope, mounted volumes, and Docker itself
-remain the bot's boundaries.
 
 **Codex follows the same split.** Both profiles default to `gpt-5.6-sol` with
 medium reasoning and a 64 KiB project-instruction budget. The **dev** profile
@@ -63,9 +54,24 @@ status line:
 | What | Lives at | Source | Overridable |
 |---|---|---|---|
 | Managed settings | `/etc/claude-code/managed-settings.json` (image) | `config/claude-settings.json` | no (policy) |
-| Hook scripts | `/etc/claude-code/hooks/` (image) | `config/claude-hooks/` | no |
+| Hook scripts (mandatory) | `/etc/claude-code/hooks/` (image) | `config/claude-hooks/` | no |
+| Hook scripts (optional) | `/usr/local/share/devcontainer-config/claude-hooks/` (**staged**) | `config/claude-hooks/` | no |
 | Status line | `/etc/claude-code/statusline.sh` (image) | `config/claude-statusline.sh` | yes |
 | User defaults | `~/.claude/settings.json` (**volume**) | `config/claude-user-defaults.json` | yes |
+
+Two rows for hooks, because they are not installed the same way. A **mandatory**
+hook is listed in the image installer's `required_files`, so every image is
+guaranteed to place it under `/etc/claude-code/hooks/`. An **optional** hook —
+currently `session-end-archive.sh` — is installed only when the repository
+ships it, so a settings entry naming the `/etc` copy would break the moment the
+image pin were rolled back past the release that added it. Those are registered
+at their **staged** path instead, where the repository's own
+`COPY .devcontainer/config/` puts them regardless of which image is pinned.
+
+The practical consequence when troubleshooting: for an optional hook, the copy
+under `/etc/claude-code/hooks/` is **not** the one that runs. Inspect or replace
+the staged copy, and check `managed-settings.json` for the path actually
+registered rather than assuming it.
 
 The last row is the one exception, and deliberately so: `~/.claude/settings.json`
 is volume-backed because Claude Code writes your in-app changes there. Every
@@ -202,6 +208,20 @@ a `TERM=… docker exec` prefix changes only the client's environment. Ask for t
 terminal you want with `-e`:
 `docker exec -e TERM=xterm-256color -it <container> bash`.
 
+## OpenCode
+
+The shared image installs the stable `opencode` CLI with no repository or user
+configuration layered on top. Start it with `opencode`, then use `/connect` (or
+`opencode auth login`) to choose and authenticate a provider. OpenCode continues
+to read this repository's `AGENTS.md` as its project instructions.
+
+Both its user config (`~/.config/opencode`) and application data
+(`~/.local/share/opencode`, including authentication and conversations) use
+profile-specific named volumes; Coder maps the same paths into
+`~/.persistent`. Rebuilding the container therefore keeps future custom config,
+provider logins, and sessions. The image disables OpenCode's self-updater so the
+pinned, tested version remains stable until the shared image is rebuilt.
+
 ## Persistent agent sessions (Herdr)
 
 **Herdr** is the agent-session runtime in both profiles: it owns the panes your
@@ -243,12 +263,12 @@ state survives a rebuild: snapshot restore brings the workspace shape back —
 tabs, panes, cwds, layout — as fresh shells. Whether an agent *conversation*
 resumes inside its restored pane is a separate mechanism:
 `resume_agents_on_restore` only works for agents whose Herdr integration has
-recorded a native session reference. post-create installs the Claude Code and
-Codex integrations automatically (`herdr integration install`, idempotent) —
-Gemini has no resume integration in v0.8. The
+recorded a native session reference. post-create installs the Claude Code,
+Codex, and OpenCode integrations automatically (`herdr integration install`,
+idempotent) — Gemini has no resume integration in v0.8. The
 conversations themselves persist regardless, in the `~/.claude`, `~/.codex`,
-and `~/.gemini` volumes, so a pane that restores as a plain shell can still
-resume its agent by hand (e.g. `claude --resume`).
+`~/.gemini`, and `~/.local/share/opencode` volumes, so a pane that restores as a
+plain shell can still resume its agent by hand (e.g. `claude --resume`).
 
 The default session's server socket deliberately does **not** live in that
 volume. The image sets `HERDR_SOCKET_PATH=/tmp/herdr.sock` container-wide, so a
@@ -294,9 +314,26 @@ you log in as yourself:
 
 ```sh
 gh auth login --hostname github.com --git-protocol https \
-  --web --scopes "workflow,project"
+  --web --scopes "$(bash -c '. scripts/gh-scopes.sh && gh_scopes_request_list')"
 gh auth setup-git
 ```
+
+The scope list is **derived**, not typed: `scripts/gh-scopes.sh` is the single
+source this repo's session-start check and `task setup:gh-scopes` read, so the
+login above asks for exactly what the check demands — including profile-specific
+additions such as `admin:org` in an organization repo. Outside a checkout, use
+the literal `--scopes "workflow,project"` and then run `task setup:gh-scopes`
+once you have cloned, which adds anything missing and verifies it landed.
+
+The human profile sets `GH_BROWSER` to a small host-browser bridge. In a remote
+VS Code session, it uses the server's `bin/helpers/browser.sh` handoff; with a
+desktop CLI, it uses `code --open-url` only when that CLI advertises the option.
+On Coder, the plain CLI, or a disconnected VS Code session where neither handoff
+is available, the bridge prints the exact URL to open manually. It deliberately
+never tries `w3m`, `lynx`, or generic browser discovery, so an installed terminal
+browser cannot capture the flow. Both the initial `gh auth login --web` and the
+browser flow used by `task setup:gh-scopes` inherit this behavior from
+`GH_BROWSER`.
 
 `--scopes` is *additive* to gh's defaults (`repo`, `read:org`, `gist`). `project`
 is what Projects V2 writes need — without it `task status:gh` reports the board
@@ -327,6 +364,11 @@ rather than deleting it, which is why this is not done by evicting the names in
 **You will do this again after every rebuild.** `~/.config/gh` is on no volume —
 [architecture/security.md](../architecture/security.md) explains why that is the
 trade rather than an oversight.
+
+If you find yourself logging in far more often than you rebuild, the problem is
+not the missing volume — it is that something is **recreating** the container
+behind your back. Chase that instead; see
+[Attach paths and container managers](#attach-paths-and-container-managers).
 
 Nothing fails hard before you log in. `post-create` prints the commands above and
 sibling repos are skipped with a warning (re-run
@@ -454,6 +496,193 @@ repo** (one template serves every repo). To stand this repo up in Coder:
 > base image, so the classic-PAT / private-base-image (`ghcr_read_token`)
 > complication does not apply here — only the repo's own `-devcontainer` cache
 > image matters.
+
+## Attach paths and container managers
+
+**Two different managers can attach VS Code to the same dev container**, and
+they are not interchangeable:
+
+| Manager | How you start it | `REMOTE_CONTAINERS` | `devcontainer.json` `customizations.vscode` |
+|---|---|---|---|
+| **Dev Containers extension** | "Dev Containers: Reopen in Container" | `true` | applied |
+| **Coder devcontainer integration** | the Coder UI **VS Code** button, or the `coder` CLI | unset | **not** applied |
+
+That second row is the one that surprises people. A Coder-attached window is a
+perfectly good shell in the right container, but nothing in
+`customizations.vscode` reached it — settings, and the extension list, are
+whatever your Coder-side configuration provides. `post-create-common.sh` already
+branches on `REMOTE_CONTAINERS` for the git-credential handling, so the two
+paths differ in mechanism even where they agree on identity.
+
+**Standardize on the Dev Containers extension path.** It builds from the current
+checkout and applies `customizations.vscode`, so what you attach to matches what
+the repo says; the Coder button is a fallback that reattaches to whatever
+container already exists, however old the image it was built from. Alternating
+between the two flips you between a fresh container and a stale one, and the
+symptoms are content-level — an older starship prompt, a retired statusline —
+which read as client-side rendering faults and get diagnosed as such. The tell
+is the staleness warning: `post-start` and the `Environment` section of
+`task status` both run `.devcontainer/scripts/check-image-staleness.sh`, which
+diffs the image-baked `/usr/local/share/devcontainer-config/` against
+`.devcontainer/config/` and prints `image is stale: N baked configs differ from
+the checkout — rebuild the container` when they have drifted. It is warn-only
+and silent when clean, so seeing it at all means rebuild rather than debug.
+
+### The standard flow, step by step
+
+Coder is still how you reach the workspace **host** — the split above is only
+about which layer makes the *container* hop. The extension path, concretely:
+
+1. **Connect to the workspace itself** (Coder UI button or "Coder: Open
+   Workspace"). If the picker offers both the workspace and a
+   `devcontainer` sub-agent target, choose the **workspace** — the sub-agent
+   target is exactly the Coder-direct hop the table above warns about.
+2. In that host window: **File → Open Folder** → the repo checkout on the
+   host.
+3. VS Code detects `.devcontainer/` and offers **"Reopen in Container"** —
+   accept it (or run "Dev Containers: Reopen in Container" from the palette).
+   When it asks which config, pick the **dev profile**
+   (`.devcontainer/dev/devcontainer.json`) for interactive work; the root
+   config is the bot profile.
+4. **Every reattach after that is one click**: File → **Open Recent** — the
+   entry reading `<repo> [Dev Container: DEV — …]` replays the whole nested
+   route (Coder → extension → container) correctly. This is the reattach
+   path; the Coder button is not. `scripts/open-devcontainer.sh <repo-match>`
+   is the same click from a terminal: it lifts the matching `dev-container+…`
+   folder URI out of VS Code's own recents and runs `code --folder-uri` (no
+   argument lists what is on offer, each line ending in a short `[token]` to
+   pass instead of a name when two profiles of one checkout read alike). It
+   belongs on the **client**, which is where that recents database and `code`
+   are — this checkout is on the workspace host, so copy the script to the
+   client once rather than running it over SSH against the wrong machine's
+   state; it is deliberately self-contained, so a copy is all it takes:
+
+   ```sh
+   mkdir -p ~/bin
+   scp <workspace-host>:<checkout>/scripts/open-devcontainer.sh ~/bin/open-devcontainer
+   chmod +x ~/bin/open-devcontainer
+   ```
+
+   Copying from your own checkout — not `curl`ing a branch — is deliberate:
+   it installs exactly the reviewed version sitting next to the docs you are
+   reading, where a download from a moving branch would fetch whatever it
+   has become since.
+
+   Then wrap the installed copy in whatever your fingers already reach for —
+   `alias devbox='~/bin/open-devcontainer <repo-match>'`, a Raycast script
+   command, a Shortcuts action — remembering that it can only replay an entry
+   that exists, so step 3 is still how a repo gets its first one.
+
+   The README's **Coder Dev Container** badge is the same recommendation in a
+   clickable surface. Its target must be captured from VS Code rather than
+   reconstructed: run `~/bin/open-devcontainer` with no arguments, choose the
+   matching `[token]`, then print the exact launch without opening it:
+
+   ```sh
+   OPEN_DEVCONTAINER_DRY_RUN=1 ~/bin/open-devcontainer <token>
+   ```
+
+   Copy the `vscode-remote://dev-container+…` value after `--folder-uri` into
+   the template's `devcontainer_coder_folder_uri` answer. The README converts
+   that internal folder URI to VS Code's registered
+   `vscode://vscode-remote/…` protocol form before routing it through
+   `vscode.dev/redirect`. Before publishing the README, first round-trip the
+   captured value with `code --folder-uri '<captured-uri>'`, then click the
+   rendered badge from the README; only keep it if both paths open this repo's
+   dev profile through the currently installed Dev Containers extension. The
+   hex payload is an extension implementation detail, so repeat this capture
+   and validation whenever an extension update invalidates the link. Leaving
+   the answer empty omits the personal Coder badge and retains the clearly
+   labeled **Local Dev Container** clone-in-volume fallback.
+5. **Rebuilds** happen from the same window: "Dev Containers: Rebuild
+   Container".
+
+**Which path a window used is written in its bottom-left corner.** The remote
+indicator reads `Dev Container: DEV — …` in an extension-attached window and
+`Coder: <workspace>` (or the bare workspace name) in a Coder-direct one — a
+glance answers it before any terminal is opened. The shell-level check agrees:
+`echo $REMOTE_CONTAINERS` prints `true` only on the extension path. One caveat: the two managers each
+keep their own container generation, so after adopting this flow, remove any
+old Coder-managed container on the host (`docker ps -a`, then `docker rm -f`
+the stale one and `docker rmi` its image) — until then the Coder button keeps
+serving it, and only the staleness warning will tell you.
+
+Triage a suspect window with one line:
+
+```sh
+hostname; echo "RC=$REMOTE_CONTAINERS CODER=$CODER LANG=$LANG"; readlink -f ~/.claude.json
+```
+
+- `hostname` — which container you are actually in. A window attached to the
+  *wrong* target is the failure that looks like everything else.
+- `RC=` / `CODER=` — which manager attached you, per the table above.
+- `LANG=` — an empty or `POSIX` value is the usual cause of mangled glyphs and
+  sort order.
+- `readlink -f ~/.claude.json` — must resolve to `~/.claude/.claude.json`. If it
+  resolves to itself, the symlink is missing and Claude Code state is **not**
+  being persisted.
+
+### Silent recreation
+
+A "reattach" can silently **recreate** the container rather than reconnect to
+it: `postCreateCommand` runs again, and anything not on a named volume is gone.
+Two managers watching one workspace makes this more likely, and a config file
+whose mtime changes on every connect is enough to trigger it — Coder's
+integration reads a changed `devcontainer.env` as a dirty config. That is why
+`scripts/init-env.sh` is **idempotent**: it composes the new env-file content in
+a temp file, compares it, and skips the write entirely when nothing changed, so
+an unchanged file keeps its mtime.
+
+Recognizing a recreation after the fact:
+
+- fresh mtimes on `~/.zshrc` and `~/.bashrc` (post-create rewrote the source
+  lines);
+- exactly one log directory under `~/.vscode-server/data/logs/` — a
+  long-running container accumulates several;
+- `gh auth status` in the **dev** profile reporting no login. This is the most
+  visible symptom, and the easiest to misread: `~/.config/gh` is deliberately on
+  no volume, so re-authenticating after a *genuine* rebuild is the intended cost
+  — but re-authenticating when you did not rebuild anything is this bug, not that
+  trade;
+- anything under `~/` that is not on a named volume reverted to image defaults.
+
+Nothing here is data loss by design: agent state, shell history, and zoxide data
+all sit on named volumes precisely so a recreation is survivable, and
+`~/.claude.json` is symlinked onto one for the same reason (below). What is lost
+is container-local scratch — and, in `dev/`, the `gh` login, which is on no
+volume by decision rather than by omission (see
+[architecture/security.md](../architecture/security.md)). That makes the login a
+useful **canary**: a re-auth prompt you did not expect is the cheapest signal
+that a recreation happened. The fix for re-authenticating too often is to stop
+the silent recreations, not to persist a plaintext token.
+
+If the prompt draws boxes or run-together segments in a Coder-attached window,
+that is the client-side Nerd Font issue in
+[troubleshooting.md](troubleshooting.md), not a container fault: the font must be
+set at **user** scope on the client, because a Coder window never applies the
+devcontainer's `customizations.vscode` and we deliberately do not ship
+`terminal.integrated.fontFamily`.
+
+### Why `~/.claude.json` is a symlink
+
+Claude Code keeps account and session state — the OAuth account, subscription
+linkage, remote-control registration, per-project history — in `~/.claude.json`,
+which sits in the home directory, **outside** the persisted `~/.claude/` volume.
+The lifecycle therefore symlinks `~/.claude.json` → `~/.claude/.claude.json` so
+that state lands on the volume.
+
+The migration is deliberately non-destructive
+(`.devcontainer/scripts/link-claude-json.sh`), and the failure it prevents is
+worth knowing. Anything that launches `claude` *before* the symlink exists makes
+Claude Code write a fresh, near-empty **real** file at `~/.claude.json` — little
+more than a trust-dialog acceptance. Post-start then used to `mv` that stub over
+the persisted copy, so a container recreation logged you out, dropped plan
+detection to usage credits, and broke remote-control session resume. The helper
+now runs **early** in post-create, before anything that can spawn `claude`, and
+the volume copy always wins: a stray file is deep-merged *into* it (contributing
+only keys the volume lacks), and if it cannot be merged safely it is parked
+beside the volume copy as a timestamped `.bak` rather than either side being
+lost. `readlink -f ~/.claude.json` above is the one-second check that it worked.
 
 ## Working on related repos
 

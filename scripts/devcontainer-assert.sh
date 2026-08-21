@@ -127,11 +127,17 @@ assert_unit() {
         fail "Codex bot-mode helper depends on yq for TOML mutation"
     fi
 
-    local bot_config dev_config
+    local bot_config dev_config shell_aliases gh_browser
     bot_config="${repo_root}/.devcontainer/devcontainer.json"
     dev_config="${repo_root}/.devcontainer/dev/devcontainer.json"
+    shell_aliases="${repo_root}/.devcontainer/config/shell-aliases.sh"
+    gh_browser="${repo_root}/.devcontainer/config/gh-browser.sh"
     [ -f "$bot_config" ] || fail "bot devcontainer.json not found at ${bot_config}"
     [ -f "$dev_config" ] || fail "dev devcontainer.json not found at ${dev_config}"
+    [ -f "$shell_aliases" ] || fail "shell-aliases.sh not found at ${shell_aliases}"
+    [ -x "$gh_browser" ] || fail "GitHub browser bridge is missing or not executable at ${gh_browser}"
+    grep -q '^unset BROWSER$' "$shell_aliases" ||
+        fail "shell-aliases.sh no longer removes generic BROWSER from interactive shells"
 
     # `task` and the rest of the shared toolchain come from the pinned public
     # image, never a devcontainer Feature: the go-task Feature resolved
@@ -341,6 +347,58 @@ assert_unit() {
     *harmon-sentinel*) fail "init-env.sh printed a secret VALUE in its warning output" ;;
     esac
 
+    # 6b. A run that changes nothing must not TOUCH the env-file. init-env.sh is
+    #     an initializeCommand, so it fires on every VS Code connect, not just
+    #     rebuilds — and an unconditional rewrite churns the file's mtime, which
+    #     is enough for Coder's devcontainer integration to read the config as
+    #     dirty and recreate the container. mtime, not just content, is the
+    #     assertion: a byte-identical rewrite would pass a content-only check
+    #     and still cause the recreation loop.
+    local mtime_before mtime_after content_before
+    env_file="${work_dir}/env-idempotent"
+    printf 'TS_AUTHKEY=stable\nCLAUDE_CODE_OAUTH_TOKEN=tok\nAGENT_DECK_TELEGRAM_KEY=key\n' >"$env_file"
+    # First run settles the file (it may legitimately rewrite here).
+    TS_AUTHKEY=stable CLAUDE_CODE_OAUTH_TOKEN=tok AGENT_DECK_TELEGRAM_KEY=key \
+        bash "$init_env" "$env_file" "${dev_allow[@]}" 2>/dev/null
+    content_before="$(cat "$env_file")"
+    mtime_before="$(stat -c %Y "$env_file" 2>/dev/null || stat -f %m "$env_file")"
+    sleep 1
+    # Second run with an identical host env: nothing to inject, nothing to evict.
+    TS_AUTHKEY=stable CLAUDE_CODE_OAUTH_TOKEN=tok AGENT_DECK_TELEGRAM_KEY=key \
+        bash "$init_env" "$env_file" "${dev_allow[@]}" 2>/dev/null
+    mtime_after="$(stat -c %Y "$env_file" 2>/dev/null || stat -f %m "$env_file")"
+    [ "$mtime_before" = "$mtime_after" ] ||
+        fail "init-env.sh rewrote an unchanged env-file (mtime ${mtime_before} -> ${mtime_after}) — the mtime churn makes Coder recreate the container on every connect"
+    [ "$(cat "$env_file")" = "$content_before" ] ||
+        fail "init-env.sh changed the contents of an already-settled env-file"
+
+    #     A run that DOES have work to do must still write. Guards the obvious
+    #     wrong fix for the above: skipping the write unconditionally.
+    env_file="${work_dir}/env-idempotent-change"
+    printf 'TS_AUTHKEY=old\n' >"$env_file"
+    TS_AUTHKEY=new bash "$init_env" "$env_file" "${dev_allow[@]}" 2>/dev/null
+    grep -q '^TS_AUTHKEY=new$' "$env_file" ||
+        fail "init-env.sh skipped a write it needed to make — the changed TS_AUTHKEY never reached the env-file"
+
+    # 6c. Permissions are enforced even when the CONTENT needs no write. A
+    #     pre-existing env-file (copied from devcontainer.env.example under a
+    #     permissive umask) holds secrets at 0644, and a skip-on-identical run
+    #     must still tighten it — while leaving mtime alone (chmod never
+    #     touches mtime, so both assertions can hold at once).
+    env_file="${work_dir}/env-loose-perms"
+    printf 'TS_AUTHKEY=stable\nCLAUDE_CODE_OAUTH_TOKEN=tok\nAGENT_DECK_TELEGRAM_KEY=key\n' >"$env_file"
+    chmod 644 "$env_file"
+    mtime_before="$(stat -c %Y "$env_file" 2>/dev/null || stat -f %m "$env_file")"
+    sleep 1
+    TS_AUTHKEY=stable CLAUDE_CODE_OAUTH_TOKEN=tok AGENT_DECK_TELEGRAM_KEY=key \
+        bash "$init_env" "$env_file" "${dev_allow[@]}" 2>/dev/null
+    mode_after="$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file")"
+    [ "$mode_after" = "600" ] ||
+        fail "init-env.sh left a secret env-file at mode ${mode_after} — 0600 must be enforced on every run, not only on rewrites"
+    mtime_after="$(stat -c %Y "$env_file" 2>/dev/null || stat -f %m "$env_file")"
+    [ "$mtime_before" = "$mtime_after" ] ||
+        fail "init-env.sh churned mtime while fixing permissions on an unchanged env-file"
+
     # 7. tailscale-connect.sh no-ops (exit 0, prints its "unavailable" message)
     #    when `tailscale` is not on PATH. Invoke with an absolute bash path so
     #    the unreachable PATH doesn't also hide the interpreter.
@@ -400,17 +458,50 @@ assert_unit() {
         .artifactReviewPolicy == "always-proceed" and
         .allowNonWorkspaceAccess == true and
         .enableTerminalSandbox == false and
+        .statusLine.type == "command" and
+        .statusLine.command == "/etc/claude-code/statusline.sh" and
+        .statusLine.enabled == true and
+        .statusLine.stack_with_default == false and
         .trustedWorkspaces == [$workspace]
     ' --arg workspace "$agy_workspace" "$agy_settings" >/dev/null ||
         fail "Antigravity dev container policy was not merged correctly"
     jq -e '
-        .schemaVersion == 3 and
+        .schemaVersion == 4 and
         .present == ["toolPermission"] and
         .values.toolPermission == "request-review" and
         .introducedWorkspaces == [$workspace] and
         .trustedWorkspacesKeyWasPresent == false
     ' --arg workspace "$agy_workspace" "$agy_backup" >/dev/null ||
         fail "Antigravity policy rollback state was not recorded correctly"
+
+    local agy_mig_home agy_mig_settings agy_mig_backup
+    agy_mig_home="${work_dir}/agy-mig-home"
+    agy_mig_settings="${agy_mig_home}/.gemini/antigravity-cli/settings.json"
+    agy_mig_backup="${agy_mig_home}/.gemini/antigravity-cli/settings.json.harmon-init-autonomy-backup"
+    mkdir -p "${agy_mig_home}/.gemini/antigravity-cli"
+    printf '%s\n' '{"schemaVersion":3,"present":["toolPermission"],"values":{"toolPermission":"request-review"},"introducedWorkspaces":["/tmp/old"],"trustedWorkspacesKeyWasPresent":false}' >"$agy_mig_backup"
+    printf '%s\n' '{"statusLine":{"type":"command","command":"/custom/statusline.sh"}}' >"$agy_mig_settings"
+    HOME="$agy_mig_home" bash "$agy_apply" apply "$agy_defaults" "$agy_workspace" >/dev/null
+    jq -e '
+        .schemaVersion == 4 and
+        (.present | index("statusLine") != null) and
+        .values.statusLine.command == "/custom/statusline.sh"
+    ' "$agy_mig_backup" >/dev/null ||
+        fail "legacy schemaVersion 3 backup was not migrated to schemaVersion 4 with custom statusLine captured"
+
+    # Test that restore also handles legacy schemaVersion 3 rollback state and preserves user statusLine
+    printf '%s\n' '{"schemaVersion":3,"present":["toolPermission"],"values":{"toolPermission":"request-review"},"introducedWorkspaces":["/tmp/old"],"trustedWorkspacesKeyWasPresent":false}' >"$agy_mig_backup"
+    printf '%s\n' '{"toolPermission":"always-proceed","artifactReviewPolicy":"always-proceed","allowNonWorkspaceAccess":true,"enableTerminalSandbox":false,"statusLine":{"type":"command","command":"/custom/statusline.sh"},"trustedWorkspaces":["/tmp/old"]}' >"$agy_mig_settings"
+    HOME="$agy_mig_home" bash "$agy_apply" restore >/dev/null
+    jq -e '
+        .toolPermission == "request-review" and
+        has("artifactReviewPolicy") == false and
+        has("allowNonWorkspaceAccess") == false and
+        has("enableTerminalSandbox") == false and
+        .statusLine.command == "/custom/statusline.sh" and
+        has("trustedWorkspaces") == false
+    ' "$agy_mig_settings" >/dev/null ||
+        fail "Antigravity policy rollback did not handle legacy schemaVersion 3 backup on restore while preserving statusLine"
 
     HOME="$agy_home" bash "$agy_apply" apply "$agy_defaults" "$agy_workspace_moved" >/dev/null
     jq -e '.trustedWorkspaces == [$first, $second]' \
@@ -431,6 +522,7 @@ assert_unit() {
         has("artifactReviewPolicy") == false and
         has("allowNonWorkspaceAccess") == false and
         has("enableTerminalSandbox") == false and
+        has("statusLine") == false and
         has("trustedWorkspaces") == false
     ' "$agy_settings" >/dev/null ||
         fail "Antigravity policy rollback did not restore only the managed keys"
@@ -459,7 +551,101 @@ assert_unit() {
         fail "human dev profile applies the bot-only Antigravity autonomy policy"
     fi
 
-    # 9. The shared post-create guidance must never steer a BOT container to an
+    # 9. The GitHub CLI browser bridge must use the VS Code host opener when it
+    #    works, and print the exact URL when that command is absent or fails.
+    #    Remote VS Code's `code --open-url` is a false friend: it can ignore the
+    #    option and exit 0, so prefer its bundled browser helper and capability-
+    #    check any desktop CLI fallback.
+    #    Generic discovery is intentionally forbidden: terminal browsers are
+    #    installed in the image and would trap the OAuth flow in-container.
+    local browser_bin browser_helpers browser_log browser_sentinel browser_out browser_url
+    browser_bin="${work_dir}/browser-bin"
+    browser_helpers="${work_dir}/helpers"
+    browser_log="${work_dir}/browser-args"
+    browser_sentinel="${work_dir}/terminal-browser-ran"
+    browser_url='https://github.com/login/device?user_code=ABCD-EFGH&source=gh'
+    mkdir -p "$browser_bin" "$browser_helpers"
+    ln -s "$bash_bin" "${browser_bin}/bash"
+    for browser_dependency in dirname grep readlink; do
+        ln -s "$(command -v "$browser_dependency")" "${browser_bin}/${browser_dependency}"
+    done
+    printf '%s\n' '#!/bin/sh' \
+        'if [ "${1:-}" = "--help" ]; then' \
+        '    [ "${GH_BROWSER_TEST_OPEN_URL_SUPPORT:-0}" = "1" ] && echo "  --open-url"' \
+        '    exit 0' \
+        'fi' \
+        'printf "%s\\n" "$@" >"$GH_BROWSER_TEST_LOG"' \
+        'exit "${GH_BROWSER_TEST_CODE_RC:-0}"' >"${browser_bin}/code"
+    chmod 0755 "${browser_bin}/code"
+    printf '%s\n' '#!/bin/sh' \
+        'printf "%s\\n" "$@" >"$GH_BROWSER_TEST_LOG"' \
+        'if [ "${GH_BROWSER_TEST_HELPER_ERROR:-0}" = "1" ]; then' \
+        '    echo "host handoff diagnostic with unstable wording" >&2' \
+        'fi' \
+        'exit "${GH_BROWSER_TEST_HELPER_RC:-0}"' >"${browser_helpers}/browser.sh"
+    chmod 0755 "${browser_helpers}/browser.sh"
+    for terminal_browser in w3m lynx sensible-browser xdg-open; do
+        printf '%s\n' '#!/bin/sh' \
+            'printf "%s\\n" "$0" >"$GH_BROWSER_TEST_SENTINEL"' \
+            'exit 99' >"${browser_bin}/${terminal_browser}"
+        chmod 0755 "${browser_bin}/${terminal_browser}"
+    done
+
+    GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url"
+    [ "$(cat "$browser_log")" = "$browser_url" ] ||
+        fail "GitHub browser bridge did not pass the exact URL to the remote helper"
+    [ ! -e "$browser_sentinel" ] ||
+        fail "GitHub browser bridge invoked a terminal browser after the remote helper succeeded"
+
+    browser_out="$(GH_BROWSER_TEST_HELPER_ERROR=1 GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url" 2>&1)"
+    case "$browser_out" in
+    *"$browser_url"*) ;;
+    *) fail "GitHub browser bridge trusted unexpected output from the remote helper: ${browser_out}" ;;
+    esac
+
+    browser_out="$(GH_BROWSER_TEST_HELPER_RC=1 GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url" 2>&1)"
+    case "$browser_out" in
+    *"$browser_url"*) ;;
+    *) fail "GitHub browser bridge did not print the URL after the remote helper failed: ${browser_out}" ;;
+    esac
+    [ ! -e "$browser_sentinel" ] ||
+        fail "GitHub browser bridge invoked a terminal browser after the remote helper failed"
+
+    rm "${browser_helpers}/browser.sh"
+    GH_BROWSER_TEST_OPEN_URL_SUPPORT=1 GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url"
+    [ "$(sed -n '1p' "$browser_log")" = "--open-url" ] &&
+        [ "$(sed -n '2p' "$browser_log")" = "$browser_url" ] &&
+        [ "$(wc -l <"$browser_log" | tr -d ' ')" = "2" ] ||
+        fail "GitHub browser bridge did not pass the exact URL to a supported code --open-url"
+
+    browser_out="$(GH_BROWSER_TEST_OPEN_URL_SUPPORT=0 GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url" 2>&1)"
+    case "$browser_out" in
+    *"$browser_url"*) ;;
+    *) fail "GitHub browser bridge trusted an unsupported code --open-url: ${browser_out}" ;;
+    esac
+
+    rm "${browser_bin}/code"
+    browser_out="$(GH_BROWSER_TEST_LOG="$browser_log" \
+        GH_BROWSER_TEST_SENTINEL="$browser_sentinel" \
+        PATH="$browser_bin" "$gh_browser" "$browser_url" 2>&1)"
+    case "$browser_out" in
+    *"$browser_url"*) ;;
+    *) fail "GitHub browser bridge did not print the URL when code was absent: ${browser_out}" ;;
+    esac
+    [ ! -e "$browser_sentinel" ] ||
+        fail "GitHub browser bridge invoked a terminal browser when code was absent"
+
+    # 10. The shared post-create guidance must never steer a BOT container to an
     #    operator `gh auth login`. Following that advice would put a human
     #    credential — `workflow` scope included — inside a bypassPermissions
     #    agent container, which is the escalation the bot PAT's denials exist to
@@ -473,6 +659,14 @@ assert_unit() {
     sed -n '/^gh_auth_help()/,/^}/p' "$post_create_common" >"$helper_src"
     [ -s "$helper_src" ] || fail "could not extract gh_auth_help() from ${post_create_common}"
 
+    # The banner asks scripts/gh-scopes.sh for the scope list (the single
+    # source shared with status.sh and setup:gh-scopes), and the extraction
+    # above takes the function body ALONE. Without the library, the call
+    # resolves to nothing, the banner renders `--scopes ""`, and a check that
+    # only looked for a login command would pass on a broken banner.
+    local scopes_lib="${repo_root}/scripts/gh-scopes.sh"
+    [ -f "$scopes_lib" ] || fail "scripts/gh-scopes.sh not found at ${scopes_lib}"
+
     # Match a pasteable COMMAND line — `gh` as the first token — not the bare
     # phrase. The token message names `gh auth login` on purpose, in a "do NOT
     # run this here" warning; a substring test would read that warning as the
@@ -481,17 +675,30 @@ assert_unit() {
         printf '%s\n' "$1" | grep -qE '^[[:space:]]*gh[[:space:]]+auth[[:space:]]+login'
     }
 
-    help_out="$(unset DEVCONTAINER_GH_AUTH && "$bash_bin" -c '. "$1"; gh_auth_help "gh auth setup-git"' _ "$helper_src")"
+    help_out="$(unset DEVCONTAINER_GH_AUTH && "$bash_bin" -c '. "$2"; . "$1"; gh_auth_help "gh auth setup-git"' _ "$helper_src" "$scopes_lib")"
     if offers_login "$help_out"; then
         fail "post-create gh guidance offers an operator login by default — a bot container must never be told to run one"
     fi
 
-    help_out="$(DEVCONTAINER_GH_AUTH=login "$bash_bin" -c '. "$1"; gh_auth_help "gh auth setup-git"' _ "$helper_src")"
+    help_out="$(DEVCONTAINER_GH_AUTH=login "$bash_bin" -c '. "$2"; . "$1"; gh_auth_help "gh auth setup-git"' _ "$helper_src" "$scopes_lib")"
     if ! offers_login "$help_out"; then
         fail "post-create gh guidance omits the operator login where the profile declares one"
     fi
 
-    # 10. Static devcontainer.json invariants via the devcontainers CLI.
+    # The login it offers must carry the DERIVED scopes, not an empty or
+    # hardcoded list — that agreement between the banner and the scope check is
+    # the acceptance criterion the single source exists to satisfy (#827).
+    case "$help_out" in
+    *'--scopes ""'*) fail "post-create login line renders an empty scope list — gh-scopes.sh was not in scope" ;;
+    esac
+    for required_scope in repo workflow; do
+        case "$help_out" in
+        *"${required_scope}"*) ;;
+        *) fail "post-create login line omits the '${required_scope}' scope: ${help_out}" ;;
+        esac
+    done
+
+    # 11. Static devcontainer.json invariants via the devcontainers CLI.
     assert_config_invariants "$repo_root" "$bot_config" bot
     assert_config_invariants "$repo_root" "$dev_config" dev
 
@@ -531,9 +738,15 @@ assert_config_invariants() {
         jq -r '(.configuration.initializeCommand // "") | test("TS_AUTHKEY") | if . then 1 else 0 end')"
     has_gh_init="$(printf '%s' "$cfg" |
         jq -r '(.configuration.initializeCommand // "") | test("GH_TOKEN") | if . then 1 else 0 end')"
-    local foreman_marker
+    local foreman_marker gh_browser_config terminal_browser_config
     foreman_marker="$(printf '%s' "$cfg" |
         jq -r '.configuration.containerEnv.FOREMAN_DEVCONTAINER // ""')"
+    gh_browser_config="$(printf '%s' "$cfg" |
+        jq -r '.configuration.containerEnv.GH_BROWSER // ""')"
+    terminal_browser_config="$(printf '%s' "$cfg" |
+        jq -r '.configuration.customizations.vscode.settings["terminal.integrated.env.linux"].BROWSER // "<absent>"')"
+    [ "$terminal_browser_config" = "" ] ||
+        fail "${profile} config no longer blanks generic BROWSER in VS Code terminals"
 
     if [ "$profile" = "bot" ]; then
         [ "$has_ts_feature" = "0" ] || fail "bot config has a tailscale feature"
@@ -541,6 +754,7 @@ assert_config_invariants() {
         [ "$has_tun" = "0" ] || fail "bot config requests /dev/net/tun"
         [ "$has_ts_init" = "0" ] || fail "bot config references TS_AUTHKEY in initializeCommand"
         [ "$has_gh_init" = "1" ] || fail "bot config does not reference GH_TOKEN in initializeCommand"
+        [ -z "$gh_browser_config" ] || fail "bot config sets GH_BROWSER — operator OAuth belongs only in the human profile"
         # Foreman's D2 startup tripwire: it refuses even read-only commands
         # unless FOREMAN_DEVCONTAINER=bot, so losing this marker breaks every
         # task foreman:* while verify stays green.
@@ -552,6 +766,8 @@ assert_config_invariants() {
         [ "$has_ts_init" = "1" ] || fail "dev config does not reference TS_AUTHKEY in initializeCommand"
         [ "$has_gh_init" = "0" ] || fail "dev config references GH_TOKEN in initializeCommand (a human profile must carry no bot credential)"
         [ -z "$foreman_marker" ] || fail "dev config sets FOREMAN_DEVCONTAINER — foreman must refuse to run in the human profile"
+        [ "$gh_browser_config" = "/usr/local/share/devcontainer-config/gh-browser.sh" ] ||
+            fail "dev config does not route GH_BROWSER through the host-browser bridge; found '${gh_browser_config}'"
 
         # Dropping GH_TOKEN only removes the FIRST link in gh's credential
         # chain. GITHUB_TOKEN and the enterprise aliases outrank the stored

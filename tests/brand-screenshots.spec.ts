@@ -33,10 +33,35 @@ for (const route of ROUTES) {
       await page.evaluate(async () => {
         await document.fonts.ready; // avoid a flash of unstyled text in the capture
       });
-      await page.screenshot({
-        path: `screenshots/${testInfo.project.name}/${slugify(route)}-${label}.png`,
-        fullPage: true,
-      });
+      // WebKit and mobile viewports cap maximum canvas / screenshot texture
+      // dimension to 32767 pixels. For long pages where scrollHeight * dpr
+      // exceeds 32767px (e.g. mobile Safari with deviceScaleFactor: 3 on /brand),
+      // clip to the maximum supported height to avoid engine surface errors.
+      const maxSurfacePixels = 32767;
+      const metrics = await page.evaluate(() => ({
+        scrollHeight: document.documentElement.scrollHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      }));
+      const totalPixels = metrics.scrollHeight * metrics.devicePixelRatio;
+
+      if (totalPixels > maxSurfacePixels) {
+        const safeHeight = Math.floor((maxSurfacePixels - 100) / metrics.devicePixelRatio);
+        const viewport = page.viewportSize();
+        await page.screenshot({
+          path: `screenshots/${testInfo.project.name}/${slugify(route)}-${label}.png`,
+          clip: {
+            x: 0,
+            y: 0,
+            width: viewport?.width ?? 1280,
+            height: safeHeight,
+          },
+        });
+      } else {
+        await page.screenshot({
+          path: `screenshots/${testInfo.project.name}/${slugify(route)}-${label}.png`,
+          fullPage: true,
+        });
+      }
     });
   }
 }
