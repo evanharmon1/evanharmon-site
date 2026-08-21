@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: d03c76f5cbf63982b5941b68a73561e2a84fbc92
+_commit: 59de8181cfe1c053e5ebf959d5311a1ff293fa4b
 _src_path: https://github.com/evanharmon1/harmon-init
 bunch_add: false
 ci_runner: ubuntu-latest
@@ -9,6 +9,8 @@ codeql_languages:
   - javascript-typescript
 deploy_cloudflare_workers: true
 devcontainer: true
+devcontainer_coder_folder_uri: ''
+foreman_additional_trusted_actors: ''
 git_init: false
 github_org: evanharmon1
 github_release_init: false

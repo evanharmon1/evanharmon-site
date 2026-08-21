@@ -11,12 +11,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # The helper is co-located. In the template source both files carry conditional
-# names ([% if … %]…[% endif %]); in a rendered repo they are plain
-# sync-devkit-release.sh. Resolve whichever is present.
+# names; in a rendered repo they are plain sync-devkit-release.sh. Resolve
+# whichever is present.
+open_tag='[%'
 if [ -f "$SCRIPT_DIR/sync-devkit-release.sh" ]; then
     HELPER="$SCRIPT_DIR/sync-devkit-release.sh"
-elif [ -f "$SCRIPT_DIR/[% if use_skills_sync %]sync-devkit-release.sh[% endif %]" ]; then
-    HELPER="$SCRIPT_DIR/[% if use_skills_sync %]sync-devkit-release.sh[% endif %]"
+elif [ -f "$SCRIPT_DIR/${open_tag} if use_skills_sync %]sync-devkit-release.sh${open_tag} endif %]" ]; then
+    HELPER="$SCRIPT_DIR/${open_tag} if use_skills_sync %]sync-devkit-release.sh${open_tag} endif %]"
 else
     echo "cannot find sync-devkit-release.sh" >&2
     exit 1
@@ -92,6 +93,11 @@ sync:skills)
         echo "# ref: \$(awk '/^[[:space:]]*ref:/{sub(/^[[:space:]]*ref:[[:space:]]*/,""); print}' .skills-sync.yaml)" > .claude/skills/.SKILLS_PROVENANCE
         echo "# categories: universal" >> .claude/skills/.SKILLS_PROVENANCE
         echo "# managed: universal" >> .claude/skills/.SKILLS_PROVENANCE
+        # scripts/link-agent-skills.sh sync is the second command of
+        # 'task sync:skills'; mirror it so the scope guard is exercised
+        # against the .agents/skills/ compatibility symlink it writes.
+        mkdir -p .agents/skills
+        [ -e .agents/skills/universal ] || [ -L .agents/skills/universal ] || ln -s ../../.claude/skills/universal .agents/skills/universal
     else
         echo "sync:skills failed" >&2
         exit 1
@@ -479,7 +485,11 @@ test_noop_when_current() {
     echo "# categories: universal" >>"$FIXTURE/.claude/skills/.SKILLS_PROVENANCE"
     echo "# managed: universal" >>"$FIXTURE/.claude/skills/.SKILLS_PROVENANCE"
     mkdir -p "$FIXTURE/.claude/skills/universal"
-    git -C "$FIXTURE" add .claude/skills/.SKILLS_PROVENANCE .claude/skills/universal >/dev/null 2>&1 || true
+    # A current repo already carries the portable .agents/skills/ link too,
+    # so the stub's link step is a no-op and the run stays a true no-op.
+    mkdir -p "$FIXTURE/.agents/skills"
+    ln -s ../../.claude/skills/universal "$FIXTURE/.agents/skills/universal"
+    git -C "$FIXTURE" add .claude/skills/.SKILLS_PROVENANCE .claude/skills/universal .agents/skills/universal >/dev/null 2>&1 || true
     git -C "$FIXTURE" commit -m "add provenance" >/dev/null 2>&1
     git -C "$FIXTURE" push origin main >/dev/null 2>&1
     run_helper_with_tag v0.1.0 || return 1
@@ -568,6 +578,8 @@ sync:skills)
     mkdir -p .claude/skills/universal
     echo "# ref: $(awk '/^[[:space:]]*ref:/{sub(/^[[:space:]]*ref:[[:space:]]*/,""); print}' .skills-sync.yaml)" > .claude/skills/.SKILLS_PROVENANCE
     echo "# managed: universal" >> .claude/skills/.SKILLS_PROVENANCE
+    mkdir -p .agents/skills
+    [ -e .agents/skills/universal ] || [ -L .agents/skills/universal ] || ln -s ../../.claude/skills/universal .agents/skills/universal
     ;;
 verify:skills:offline) echo "verify failed" >&2; exit 1;;
 security:secrets) ;;
