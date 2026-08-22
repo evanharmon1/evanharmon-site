@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.2.0](https://github.com/evanharmon1/evanharmon-site/compare/v0.1.1...v0.2.0) (2026-08-22)
+
+
+### Features
+
+* **pm:** fit label registry to this site — content domains and subsystem areas ([#61](https://github.com/evanharmon1/evanharmon-site/issues/61)) ([b792c5c](https://github.com/evanharmon1/evanharmon-site/commit/b792c5cc9c8003fe601e42422a981224caa0ecac))
+
 ## [0.1.1](https://github.com/evanharmon1/evanharmon-site/compare/v0.1.0...v0.1.1) (2026-08-01)
 
 
