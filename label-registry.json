@@ -230,12 +230,20 @@
           "description": "Authentication and authorization"
         },
         {
-          "value": "billing",
-          "description": "Billing and payments"
+          "value": "brand",
+          "description": "The Almanac visual identity: themes, typography, ornaments, brand page, design tokens"
         },
         {
-          "value": "platform",
-          "description": "CI, build, test infra, and tooling in this repo"
+          "value": "content",
+          "description": "What the site says: blog posts, about/now/projects copy, bio, CMS authoring"
+        },
+        {
+          "value": "seo",
+          "description": "Discoverability and sharing: metadata, OG images, sitemap, RSS, robots"
+        },
+        {
+          "value": "hosting",
+          "description": "Getting the site served: Netlify/Cloudflare, DNS, headers, deploy"
         }
       ]
     },
@@ -297,6 +305,62 @@
         {
           "value": "gauntlet",
           "description": "The challenge/review second-model stage: scripts, gates, and skill wiring"
+        },
+        {
+          "value": "components",
+          "description": "src/components/almanac/ — Astro UI components and islands"
+        },
+        {
+          "value": "pages",
+          "description": "src/pages/ — routes, page composition, 404, legal pages"
+        },
+        {
+          "value": "layouts",
+          "description": "src/layouts/ — page shells and markdown post layouts"
+        },
+        {
+          "value": "styles",
+          "description": "src/styles/globals.css — tokens, themes, Tailwind config"
+        },
+        {
+          "value": "blog",
+          "description": "Blog pipeline: src/data/post/, src/utils/blog.ts, MDX, tags, RSS"
+        },
+        {
+          "value": "cms",
+          "description": "public/decapcms/ — Decap CMS config and admin"
+        },
+        {
+          "value": "assets",
+          "description": "src/assets/ and public/images/ — images, fonts, favicon, OG images"
+        },
+        {
+          "value": "design-system",
+          "description": "DESIGN.md, docs/design/, shadcn components.json — brand spec, not runtime CSS"
+        },
+        {
+          "value": "e2e",
+          "description": "tests/ — Playwright, axe a11y, contrast and brand-screenshot specs"
+        },
+        {
+          "value": "lighthouse",
+          "description": "lighthouserc.json and performance budgets"
+        },
+        {
+          "value": "hosting",
+          "description": "netlify.toml, public/_headers, Cloudflare Worker, DNS"
+        },
+        {
+          "value": "astro",
+          "description": "astro.config.ts, integrations (sitemap, mdx, react), src/utils/frontmatter.ts"
+        },
+        {
+          "value": "agents-md",
+          "description": "AGENTS.md and docs/ policy prose (constitution, Dev Loop, conventions); not area:docs content"
+        },
+        {
+          "value": "specs",
+          "description": "specs/"
         }
       ]
     },
