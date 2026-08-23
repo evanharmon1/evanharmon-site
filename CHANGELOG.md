@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.0](https://github.com/evanharmon1/evanharmon-site/compare/v0.2.0...v0.3.0) (2026-08-23)
+
+
+### Features
+
+* **pm:** add area:forms, area:content, area:brand-kit to the label registry ([#64](https://github.com/evanharmon1/evanharmon-site/issues/64)) ([8a1b9ce](https://github.com/evanharmon1/evanharmon-site/commit/8a1b9ceee61f27fd6484a0e992196dad6bd9639c))
+
 ## [0.2.0](https://github.com/evanharmon1/evanharmon-site/compare/v0.1.1...v0.2.0) (2026-08-22)
 
 
