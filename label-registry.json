@@ -361,6 +361,18 @@
         {
           "value": "specs",
           "description": "specs/"
+        },
+        {
+          "value": "forms",
+          "description": "Contact/lead-capture forms and their submission plumbing"
+        },
+        {
+          "value": "content",
+          "description": "src/data/ and src/content/ collections and their schemas; static site data"
+        },
+        {
+          "value": "brand-kit",
+          "description": "Brand page downloads and public/ brand assets — logos, collateral, OG gallery"
         }
       ]
     },
