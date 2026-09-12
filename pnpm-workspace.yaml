@@ -1,8 +1,3 @@
-# pnpm build-script approvals + version pins. pnpm 10+ blocks dependency build
-# scripts by default. `allowBuilds` (a map) is the pnpm 11+ approval setting —
-# it replaced pnpm 10's `onlyBuiltDependencies` list, so this file requires
-# pnpm 11+. List the packages whose build scripts must run here (NOT the
-# package.json `pnpm` field — pnpm 10+ ignores that).
 allowBuilds:
   esbuild: true
   sharp: true
@@ -46,7 +41,7 @@ minimumReleaseAgeExclude:
 # Raising a cap means re-running `task verify` on the new major first.
 overrides:
   esbuild: '>=0.28.1'
-  sharp@<0.35.0: 0.35.3
+  sharp@<0.35.0: 0.35.4
   postcss@<8.5.18: '>=8.5.18 <9'
   brace-expansion@<5.0.9: '>=5.0.9 <6'
   minimatch@<10.2.5: '>=10.2.5 <11'
@@ -61,10 +56,3 @@ overrides:
 # replaces the old `.npmrc` `shamefully-hoist=true` — pnpm 10+ reads hoisting
 # settings only from pnpm-workspace.yaml, not `.npmrc`.
 shamefullyHoist: true
-
-# pnpm 11 defaults minimumReleaseAge to 1440 (1 day) — freshly published
-# versions won't resolve until they age. To install a pinned release younger
-# than that, add version-pinned entries here (they become harmless no-ops once
-# the version ages past the cooldown):
-# minimumReleaseAgeExclude:
-#   - some-package@1.2.3
