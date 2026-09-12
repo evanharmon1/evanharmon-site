@@ -50,9 +50,10 @@ overrides:
   postcss@<8.5.18: '>=8.5.18 <9'
   brace-expansion@<5.0.9: '>=5.0.9 <6'
   minimatch@<10.2.5: '>=10.2.5 <11'
-  js-yaml@<4.3.1: '>=4.3.1 <5'
+  js-yaml@<4.3.2: '>=4.3.2 <5'
   nanoid@<3.3.18: '>=3.3.18 <4'
-  fast-uri@<3.1.5: '>=3.1.5 <4'
+  fast-uri@<3.1.6: '>=3.1.6 <4'
+  smol-toml@<=1.7.0: '>=1.7.1 <2'
 
 # Local customization (not from the harmon-init template): expose Astro's
 # transitive deps at the root node_modules so direct imports like
