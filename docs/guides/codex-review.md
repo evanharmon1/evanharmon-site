@@ -210,7 +210,7 @@ task challenge  # adversarial second model — adjudicate, fix, re-challenge
                 # resolved from .devflow.toml
 task review     # verification checkpoint — same convergence rule, under its
                 # own resolved review cap
-task ci         # full CI mirror
+task security   # Semgrep CE + gitleaks + dependency audit — pre-publication gate
 # → open a DRAFT PR, then shepherd it: watch CI + reviews, settle the deferred
 #   P2s, adjudicate → fix → push, under the shepherd cap (independent of the
 #   loops above)
@@ -224,13 +224,18 @@ gate that ends them — is defined in AGENTS.md ("Dev Loop"). The PR is a
 is the one signal that the automated work is finished.
 
 The caps are not written down here, or in AGENTS.md. They live in
-[`.devflow.toml`](../../.devflow.toml) as `rigor` levels, and **AGENTS.md alone
-defines how a change resolves one** — restating that chain here would only give
-it a second place to drift from, and which inputs are even available depends on
-how the repository is set up. `challenge`, `review`, and the `min_rounds` floor vary by level; the
-shepherd cap is fixed, because it bounds other people's findings rather than
-self-generated work. Announce the resolved caps — the floor included — when
-you enter the loop.
+[`.devflow.toml`](../../.devflow.toml): a `rigor` level resolves to a
+`[rounds.*]` policy that sets `challenge`, `review`, `integration`, `remediation`,
+and `min_rounds` together, and **AGENTS.md alone defines how a change resolves
+one** — restating that chain here would only give it a second place to drift
+from, and which inputs are even available depends on how the repository is
+set up. All five numbers move together with the resolved policy —
+`integration` and `remediation` bound different kinds of work than confidence passes:
+external findings (CI, human review, Codex) and remediation fix pushes rather than work
+the agent generated itself, and a cap of 0 for integration means the very first thing that needs
+an answer is already at the cap, not that the integration stage's other
+obligations (watching CI, the readiness gate) go away. Announce the resolved
+profile — caps and floor included — when you enter the loop.
 
 If Codex cloud review is connected to the repo, PRs
 get a cloud pass too: inline comments only for high-priority findings, a
@@ -249,14 +254,25 @@ rounds may come back empty, all-P2 as labeled, or P1-labeled and adjudicated
 down to
 P2; what counts is the **adjudicated** column of your adjudication table, not
 the label Codex attached. The second such round *is* the confirmation, so no
-extra run is owed after it. Two cases exit faster still. A round with **no
+extra run is owed after it. A stage whose resolved cap is **0 never opens**:
+zero rounds run, and none of what follows applies to it — every deterministic
+gate and adjudication obligation elsewhere is unaffected. For any stage whose
+cap is 1 or more, two cases exit faster still than the two-consecutive rule.
+A round with **no
 findings at all** ends the stage on the spot **once the level's `min_rounds`
-floor is met** (1 wherever a level does not set it) — an empty round is exactly
+floor is met** (`0 <= min_rounds <= cap`; the built-in fallback of 1 applies
+only when `.devflow.toml` is entirely absent — a *present* config's review
+policy omitting `min_rounds` is a validation error, never a silent default)
+— an empty round is exactly
 the older "clean re-run" exit, so neither a trivial change nor a clean
-post-fix re-run pays for a confirmation pass, and a floor of 2 only delays
-that shortcut, never the other two exits, which run at least two rounds by
+post-fix re-run pays for a confirmation pass, and the floor only delays
+that one shortcut. The other two exits need no separate floor check: two
+consecutive clean rounds are two rounds regardless of the floor, and a capped
+final round runs exactly the cap, which is always at least `min_rounds` by
 construction. And a **capped
-final round** that adjudicates to zero P0/P1 ends the stage by itself: the
+final round** — including a cap of exactly 1, where that single round is
+both the first and the last — that adjudicates to zero P0/P1 ends the stage
+by itself: the
 confirmation it would otherwise owe is a run the cap forbids, and escalation
 at the cap is reserved for P0/P1 findings that persist — a clean last round
 is convergence, not disagreement.
@@ -361,7 +377,8 @@ no vendored checker at all. Follow whichever of the two applies to your
 checkout; nothing below overrides it.
 
 **Where the pinned checker is vendored**
-(`.claude/skills/shepherd/assets/check-codex-cloud-review.sh`), its exit codes
+(`.claude/skills/integrate/assets/check-codex-cloud-review.sh` or
+`.claude/skills/shepherd/assets/check-codex-cloud-review.sh`), its exit codes
 are the contract. Two things about it are worth knowing because they are not
 symmetric:
 

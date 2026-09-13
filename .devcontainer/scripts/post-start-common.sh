@@ -6,6 +6,7 @@ set -euo pipefail
 unset NODE_OPTIONS
 
 for dir in /home/vscode/.codex /home/vscode/.claude /home/vscode/.gemini \
+    /home/vscode/.copilot /home/vscode/.pi /home/vscode/.omp \
     /home/vscode/.agent-deck /home/vscode/.shell-history \
     /home/vscode/.config/herdr /home/vscode/.config/opencode \
     /home/vscode/.local/share/opencode /home/vscode/.local/share/zoxide; do
@@ -73,8 +74,10 @@ fi
 # are relocated with `agent-deck conductor migrate-dir --apply` — a fixed
 # path would go stale there. Matches post-create-common.sh's setup guard.
 REPO_NAME="$(basename "$PWD")"
+conductor_status=""
 if command -v agent-deck &>/dev/null &&
-    agent-deck conductor status "$REPO_NAME" 2>/dev/null | grep -qi "stopped"; then
+    conductor_status="$(agent-deck conductor status "$REPO_NAME" 2>/dev/null)" &&
+    grep -i "stopped" <<<"$conductor_status" >/dev/null; then
     agent-deck session start "conductor-$REPO_NAME" 2>/dev/null &
     echo "==> Conductor $REPO_NAME started"
 fi

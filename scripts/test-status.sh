@@ -271,6 +271,18 @@ make_stub() {
             ;;
         esac
         echo 'fi'
+        echo 'if [ "$1" = "repo" ] && [ "$2" = "view" ] && [ -n "${GH_REPO_JSON:-}" ]; then'
+        echo '    printf "%s\n" "$GH_REPO_JSON"'
+        echo '    exit 0'
+        echo 'fi'
+        echo 'if [ "$1" = "variable" ] && [ "$2" = "list" ] && [ -n "${GH_VARIABLES_JSON:-}" ]; then'
+        echo '    printf "%s\n" "$GH_VARIABLES_JSON"'
+        echo '    exit 0'
+        echo 'fi'
+        echo 'if [ "$1" = "variable" ] && [ "$2" = "get" ] && [ -n "${GH_CI_RUNS_ON_JSON:-}" ]; then'
+        echo '    printf "%s\n" "$GH_CI_RUNS_ON_JSON"'
+        echo '    exit 0'
+        echo 'fi'
         echo 'case "$*" in'
         echo '*"pr list"* | *"run list"*) echo "[]" ;;'
         echo '*) echo "stub: unexpected gh call: $*" >&2; exit 1 ;;'
@@ -469,8 +481,45 @@ run_setup_isolated() {
 # (`2 ok · 3 missing · 0 unknown · 4 n/a`). Empty when there is no such line,
 # which is how a case detects that the gh gate stopped the run short.
 summary_field() {
-    printf '%s\n' "$1" | sed -n -E "s#.*Summary:.*[^0-9]([0-9]+) $2.*#\1#p" | head -1
+    sed -n -E "s#.*Summary:.*[^0-9]([0-9]+) $2.*#\1#p" <<<"$1" | sed -n '1p'
 }
+
+echo "==> public setup status audits the exact CI_RUNS_ON safety value"
+make_codex_stub in
+public_repo='{"nameWithOwner":"owner/public","visibility":"PUBLIC","isPrivate":false,"defaultBranchRef":{"name":"main"}}'
+out="$(GH_REPO_JSON="$public_repo" \
+    GH_VARIABLES_JSON='[{"name":"CI_RUNS_ON"}]' \
+    GH_CI_RUNS_ON_JSON='{"name":"CI_RUNS_ON","value":"\"ubuntu-latest\""}' \
+    run_setup_section project)"
+case "$out" in
+*"[x] Actions runner routing - public CI_RUNS_ON is ubuntu-latest"*) ;;
+*) fail "expected a safe public runner-routing status, got: ${out}" ;;
+esac
+
+out="$(GH_REPO_JSON="$public_repo" \
+    GH_VARIABLES_JSON='[{"name":"CI_RUNS_ON"}]' \
+    GH_CI_RUNS_ON_JSON='{"name":"CI_RUNS_ON","value":"[\"self-hosted\",\"linux\"]"}' \
+    run_setup_section project)"
+case "$out" in
+*"[ ] Actions runner routing"*"run task setup:github"*) ;;
+*) fail "expected an unsafe public runner-routing status, got: ${out}" ;;
+esac
+
+out="$(GH_REPO_JSON="$public_repo" run_setup_section project)"
+case "$out" in
+*"[?] Actions runner routing - could not determine whether public CI_RUNS_ON exists"*) ;;
+*) fail "failed public variable probes were reported as missing: ${out}" ;;
+esac
+
+internal_repo='{"nameWithOwner":"owner/internal","visibility":"INTERNAL","isPrivate":false,"defaultBranchRef":{"name":"main"}}'
+out="$(GH_REPO_JSON="$internal_repo" \
+    GH_VARIABLES_JSON='[{"name":"CI_RUNS_ON"}]' \
+    GH_CI_RUNS_ON_JSON='{"name":"CI_RUNS_ON","value":"[\"self-hosted\",\"linux\"]"}' \
+    run_setup_section project)"
+case "$out" in
+*"Actions runner routing"*) fail "internal repository routing was audited as public: ${out}" ;;
+*) ;;
+esac
 
 echo "==> a token with 'project' reports the board as writable"
 out="$(run_gh_section project)"
@@ -695,7 +744,7 @@ STATUS_HOOKS=".devcontainer/config/claude-hooks/session-start-context.sh .claude
 # pattern keyed to one of them silently reads nothing from the other — which is
 # not a failure, just an assertion that stops asserting.
 hook_deadline() {
-    sed -n -E "s/.*[[:space:]]([0-9]+) task status:$2([[:space:]].*)?\$/\1/p" "$1" | head -1
+    sed -n -E "s/.*[[:space:]]([0-9]+) task status:$2([[:space:]].*)?\$/\1/p" "$1" | sed -n '1p'
 }
 
 # The seconds run_timeout waits between SIGTERM and SIGKILL. A probe that
@@ -704,7 +753,7 @@ hook_deadline() {
 # alone. Read out of status.sh rather than restated, because a grace changed
 # in one place and remembered in the other is exactly how these budgets rot.
 # Absent (no `-k` in run_timeout) it is zero and the sums are unchanged.
-kill_grace="$(sed -n -E 's/.*"\$\{TIMEOUT_BIN\}" -k ([0-9]+) "\$\{secs\}".*/\1/p' "${status}" | head -1)"
+kill_grace="$(sed -n -E 's/.*"\$\{TIMEOUT_BIN\}" -k ([0-9]+) "\$\{secs\}".*/\1/p' "${status}" | sed -n '1p')"
 : "${kill_grace:=0}"
 
 probe="$(sed -n -E 's/^NETWORK_TIMEOUT="\$\{NETWORK_TIMEOUT:-([0-9]+)\}"$/\1/p' "${status}")"
