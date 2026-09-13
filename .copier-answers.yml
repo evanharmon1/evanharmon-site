@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier
-_commit: 59de8181cfe1c053e5ebf959d5311a1ff293fa4b
+_commit: 5d233f7891269648cfd2b29f32f378568ce1e2cb
 _src_path: https://github.com/evanharmon1/harmon-init
 bunch_add: false
 ci_runner: ubuntu-latest
@@ -7,6 +7,7 @@ claude_authorized_members: evanharmon1
 code_owner: evanharmon1
 codeql_languages:
   - javascript-typescript
+decisions_seed_date: '2026-07-04'
 deploy_cloudflare_workers: true
 devcontainer: true
 devcontainer_coder_folder_uri: ''
@@ -36,7 +37,9 @@ use_codeql: true
 use_coderabbit: false
 use_codex_cloud_review: true
 use_codex_review: true
+use_copilot_cli: false
 use_foreman: true
 use_release_please: true
 use_shared_agents: true
 use_skills_sync: true
+use_statusline_pr_lookup: false

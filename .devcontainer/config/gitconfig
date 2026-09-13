@@ -2,10 +2,14 @@
 # Source of truth: .devcontainer/config/gitconfig
 # Installed to:    /home/vscode/.config/git/config
 #
-# This is git's XDG-compliant second user config location. Git reads it in
-# addition to ~/.gitconfig and merges the two — single-valued keys in
-# ~/.gitconfig (e.g. user.name set by post-create-common.sh) take precedence,
-# but values here apply unmodified unless explicitly overridden.
+# This is git's XDG user config location. Git reads it BEFORE ~/.gitconfig and
+# merges the two: single-valued keys in ~/.gitconfig override same-named keys
+# here, while multi-valued keys (url.insteadOf) accumulate across both files.
+# Everything environment/container-shaped belongs in this file; ~/.gitconfig is
+# reserved for personal config (VS Code's copyGitConfig may copy the host's in
+# on attach — that copy must never be able to break container plumbing).
+# post-create-common.sh appends runtime-only values (safe.directory and git
+# identity) to this file explicitly via `git config --file`.
 
 [alias]
 	ll = log --graph --oneline --decorate

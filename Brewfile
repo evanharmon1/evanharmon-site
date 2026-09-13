@@ -25,8 +25,10 @@ brew "pnpm"
 brew "lychee"
 # Python tool runner (Semgrep CE + foreman lint use uv/uvx)
 brew "uv"
-# foreman runs as bare `python3 -m foreman` and needs >= 3.11 (tomllib);
-# stock macOS ships 3.9, so the interpreter itself is a dependency.
+# Repository scripts (status, secret helpers) parse JSON with bare `python3`.
+# lint-hygiene.sh also parses .foreman.toml with bare `python3` + tomllib (>= 3.11).
+# Stock macOS ships 3.9 and uv provides no `python3` shim, so the interpreter
+# itself is still a dependency.
 brew "python"
 
 # Devcontainer
