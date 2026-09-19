@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.4](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.3...v0.3.4) (2026-09-19)
+
+
+### Bug Fixes
+
+* **deps:** update npm dependencies ([#80](https://github.com/evanharmon1/evanharmon-site/issues/80)) ([8a83ff0](https://github.com/evanharmon1/evanharmon-site/commit/8a83ff01eb553e6d31c4320aa478128e61286469))
+
 ## [0.3.3](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.2...v0.3.3) (2026-09-12)
 
 
