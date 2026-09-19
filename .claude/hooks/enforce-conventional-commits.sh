@@ -12,7 +12,7 @@ command="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
 [[ -n "$command" ]] || exit 0
 
 # Only police `git commit` invocations.
-printf '%s' "$command" | grep -qE 'git[[:space:]]+commit\b' || exit 0
+grep -E 'git[[:space:]]+commit\b' <<<"$command" >/dev/null || exit 0
 
 msg=""
 
@@ -49,7 +49,7 @@ for seg in segments:
         parsed_messages = []
         for m in messages:
             if m.startswith("$(cat <<"):
-                m = re.sub(r"^\$\(cat\s+<<['\"]?[A-Za-z0-9_]+['\"]?\s*\n", "", m)
+                m = re.sub(r"^\$\(cat\s+<<['"'"'\\\"]?[A-Za-z0-9_]+['"'"'\\\"]?\s*\n", "", m)
                 m = re.sub(r"\n[A-Za-z0-9_]+\s*\)$", "", m)
             parsed_messages.append(m)
         print("\n\n".join(parsed_messages))
@@ -57,7 +57,7 @@ for seg in segments:
 ' "$command")"
 else
     # Fallback if Python is unavailable
-    if printf '%s' "$command" | grep -q "<<'EOF'"; then
+    if grep "<<'EOF'" <<<"$command" >/dev/null; then
         msg="$(printf '%s' "$command" | awk "/<<'\''?EOF'\''?/{flag=1; next} /^EOF\$/{flag=0} flag" | head -n1)"
     fi
     if [[ -z "$msg" ]]; then

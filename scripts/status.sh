@@ -150,7 +150,7 @@ if should_show "gh" || [[ "${SECTION}" == "setup" ]]; then
     run_timeout "${NETWORK_TIMEOUT}" gh auth status --active \
         --hostname "${gh_host}" >"${GH_AUTH_FILE}" 2>&1 ||
         gh_auth_rc=$?
-    if grep -qi 'unknown flag' "${GH_AUTH_FILE}" 2>/dev/null; then
+    if grep -i 'unknown flag' "${GH_AUTH_FILE}" 2>/dev/null >/dev/null; then
         # gh predates --active (added in 2.40). Fall back rather than read a
         # usage error as a failed login — and keep --hostname, which is far
         # older. Multi-account per host arrived WITH 2.40, so on a gh this old
@@ -575,7 +575,7 @@ render_gh_scope_check() {
         # gh older than 2.40 the check simply does not run.
         run_timeout 3 gh auth status --active \
             --hostname "$(gh_target_host)" >"${file}" 2>&1 || rc=$?
-        if [[ "${rc}" -ne 0 ]] || grep -qi 'unknown flag' "${file}" 2>/dev/null; then
+        if [[ "${rc}" -ne 0 ]] || grep -i 'unknown flag' "${file}" 2>/dev/null >/dev/null; then
             # A failed probe is NOT a missing login (issues #774, #478) and is
             # not a missing scope either — say nothing rather than send a
             # correctly-scoped operator to re-mint a working credential. The
@@ -891,8 +891,23 @@ if [[ "${SECTION}" == "setup" ]]; then
             # --json name fetches ONLY names, never secret/variable values.
             (run_timeout "${NETWORK_TIMEOUT}" gh secret list --json name \
                 >"${d}/secrets.json" 2>/dev/null || echo '[]' >"${d}/secrets.json") &
-            (run_timeout "${NETWORK_TIMEOUT}" gh variable list --json name \
-                >"${d}/vars.json" 2>/dev/null || echo '[]' >"${d}/vars.json") &
+            (if run_timeout "${NETWORK_TIMEOUT}" gh variable list --json name \
+                >"${d}/vars.json" 2>/dev/null; then
+                echo yes >"${d}/vars-probe"
+            else
+                echo '[]' >"${d}/vars.json"
+                echo no >"${d}/vars-probe"
+            fi) &
+            # CI_RUNS_ON is a non-secret Actions variable whose exact public
+            # value is a security boundary. Fetch only that value; never widen
+            # the general variable inventory from names to values.
+            (if run_timeout "${NETWORK_TIMEOUT}" gh variable get CI_RUNS_ON --json name,value \
+                >"${d}/ci-runs-on.json" 2>/dev/null; then
+                echo yes >"${d}/ci-runs-on-probe"
+            else
+                echo 'null' >"${d}/ci-runs-on.json"
+                echo no >"${d}/ci-runs-on-probe"
+            fi) &
             (run_timeout "${NETWORK_TIMEOUT}" gh release list --limit 1 >"${d}/release.txt" 2>/dev/null || :) &
             # shellcheck disable=SC2016 # $o/$r are GraphQL variables, not shell
             (run_timeout "${NETWORK_TIMEOUT}" gh api graphql \
@@ -934,7 +949,7 @@ if [[ "${SECTION}" == "setup" ]]; then
                 if out="$(run_timeout "${NETWORK_TIMEOUT}" gh api \
                     "/${PKG_NS}/${OWNER}/packages/container/${REPO}-devcontainer" 2>&1)"; then
                     echo yes >"${d}/ghcr"
-                elif printf '%s' "${out}" | grep -q '404'; then
+                elif grep '404' <<<"${out}" >/dev/null; then
                     echo no >"${d}/ghcr"
                 else
                     # e.g. token lacks read:packages — don't claim "missing".
@@ -947,17 +962,17 @@ if [[ "${SECTION}" == "setup" ]]; then
         # ── Feature applicability, detected from local files ──
         # Match both .yml and .yaml — extension is each tool's own convention.
         has_claude_wf=0
-        find .github/workflows -maxdepth 1 \( -name 'claude-*.yml' -o -name 'claude-*.yaml' \) 2>/dev/null | grep -q . && has_claude_wf=1
+        grep . < <(find .github/workflows -maxdepth 1 \( -name 'claude-*.yml' -o -name 'claude-*.yaml' \) 2>/dev/null) >/dev/null && has_claude_wf=1
         has_release_wf=0
-        find .github/workflows -maxdepth 1 \( -name 'release.yml' -o -name 'release.yaml' \) 2>/dev/null | grep -q . && has_release_wf=1
+        grep . < <(find .github/workflows -maxdepth 1 \( -name 'release.yml' -o -name 'release.yaml' \) 2>/dev/null) >/dev/null && has_release_wf=1
         uses_ci_app=$((has_claude_wf || has_release_wf))
         has_codeql_wf=0
-        find .github/workflows -maxdepth 1 \( -name 'codeql.yml' -o -name 'codeql.yaml' \) 2>/dev/null | grep -q . && has_codeql_wf=1
+        grep . < <(find .github/workflows -maxdepth 1 \( -name 'codeql.yml' -o -name 'codeql.yaml' \) 2>/dev/null) >/dev/null && has_codeql_wf=1
         has_semgrep_ci=0
-        grep -rEq 'task[[:space:]]+security:sast([[:space:]]|$)' .github/workflows \
+        grep -rE 'task[[:space:]]+security:sast([[:space:]]|$)' .github/workflows \
             >/dev/null 2>&1 && has_semgrep_ci=1
         uses_full_scan=0
-        grep -rq 'FULL_SECURITY_SCAN' .github/workflows >/dev/null 2>&1 && uses_full_scan=1
+        grep -r 'FULL_SECURITY_SCAN' .github/workflows >/dev/null 2>&1 && uses_full_scan=1
 
         {
             if ${HAS_REMOTE}; then
@@ -968,7 +983,7 @@ if [[ "${SECTION}" == "setup" ]]; then
 
             # ── Local & hooks ──
             subhead "Local & hooks"
-            if grep -rql lefthook .git/hooks 2>/dev/null; then
+            if grep -rl lefthook .git/hooks 2>/dev/null >/dev/null; then
                 checkline ok "Git hooks (lefthook)"
             else
                 checkline no "Git hooks (lefthook)" "task install:hooks"
@@ -1045,7 +1060,7 @@ if [[ "${SECTION}" == "setup" ]]; then
                 subhead "GitHub configuration"
                 if ls .github/*[Rr]uleset*.json >/dev/null 2>&1; then
                     ruleset="$(jq -r '.[].name' "${d}/rulesets.json" 2>/dev/null |
-                        grep -i 'protect' | head -1 || true)"
+                        grep -i 'protect' | sed -n '1p' || true)"
                     if [ -n "${ruleset}" ]; then
                         checkline ok "Branch ruleset" "${ruleset}"
                     else
@@ -1081,8 +1096,31 @@ if [[ "${SECTION}" == "setup" ]]; then
                 else
                     checkline no "Private vuln reporting" "Settings → Advanced Security"
                 fi
+                if [ "${VISIBILITY}" = "public" ]; then
+                    if jq -e 'type == "object"' "${d}/ci-runs-on.json" >/dev/null 2>&1; then
+                        current_ci_runs_on="$(jq -r '.value // empty' "${d}/ci-runs-on.json")"
+                        if [ "${current_ci_runs_on}" = '"ubuntu-latest"' ]; then
+                            checkline ok "Actions runner routing" "public CI_RUNS_ON is ubuntu-latest"
+                        else
+                            checkline no "Actions runner routing" \
+                                "public CI_RUNS_ON must be exact ubuntu-latest JSON — run task setup:github"
+                        fi
+                    elif [ "$(cat "${d}/ci-runs-on-probe" 2>/dev/null)" = yes ]; then
+                        checkline unknown "Actions runner routing" \
+                            "CI_RUNS_ON lookup returned an unexpected payload"
+                    elif [ "$(cat "${d}/vars-probe" 2>/dev/null)" != yes ]; then
+                        checkline unknown "Actions runner routing" \
+                            "could not determine whether public CI_RUNS_ON exists"
+                    elif has_cred "${d}/vars.json" "CI_RUNS_ON"; then
+                        checkline unknown "Actions runner routing" \
+                            "CI_RUNS_ON exists but its public safety value was unreadable"
+                    else
+                        checkline no "Actions runner routing" \
+                            "public CI_RUNS_ON is missing — run task setup:github"
+                    fi
+                fi
                 if [ -f renovate.json ] || [ -f .github/renovate.json ]; then
-                    if grep -qi 'renovate' "${d}/apps.json" 2>/dev/null; then
+                    if grep -i 'renovate' "${d}/apps.json" 2>/dev/null >/dev/null; then
                         checkline ok "Renovate app" "installed"
                     elif [ "$(jq 'length' "${d}/renovate-pr.json" 2>/dev/null || echo 0)" -gt 0 ]; then
                         checkline ok "Renovate app" "active (PRs seen)"
@@ -1093,7 +1131,7 @@ if [[ "${SECTION}" == "setup" ]]; then
                     checkline na "Renovate app" "no renovate.json"
                 fi
                 if [ -f .coderabbit.yaml ] || [ -f .coderabbit.yml ]; then
-                    if grep -qi 'coderabbit' "${d}/apps.json" 2>/dev/null; then
+                    if grep -i 'coderabbit' "${d}/apps.json" 2>/dev/null >/dev/null; then
                         checkline ok "CodeRabbit app" "installed"
                     elif [ "$(cat "${d}/coderabbit.txt" 2>/dev/null || echo 0)" -gt 0 ]; then
                         checkline ok "CodeRabbit app" "active (reviews seen)"
@@ -1153,7 +1191,7 @@ if [[ "${SECTION}" == "setup" ]]; then
                             while IFS= read -r want; do
                                 [ -z "${want}" ] && continue
                                 want_count=$((want_count + 1))
-                                printf '%s\n' "${have_labels}" | grep -qxF "${want}" ||
+                                grep -xF "${want}" <<<"${have_labels}" >/dev/null ||
                                     missing_count=$((missing_count + 1))
                             done <<<"${want_labels}"
                             if [ -z "${have_labels}" ] || [ "${want_count}" -eq 0 ]; then
@@ -1170,7 +1208,7 @@ if [[ "${SECTION}" == "setup" ]]; then
                     type_names="$(jq -r 'if type == "array" then (map(.name) | join(",")) else "" end' "${d}/issue-types.json" 2>/dev/null || echo "")"
                     if [ -z "${type_names}" ]; then
                         checkline unknown "Org issue types" "needs admin:org"
-                    elif printf '%s' "${type_names}" | grep -q 'Research'; then
+                    elif grep 'Research' <<<"${type_names}" >/dev/null; then
                         checkline ok "Org issue types" "Bug/Feature/Task/Research"
                     else
                         checkline no "Org issue types" "run task setup:github-issue-types"
@@ -1196,8 +1234,8 @@ if [[ "${SECTION}" == "setup" ]]; then
                     for want in Product:text; do
                         wname="${want%%:*}"
                         wtype="${want##*:}"
-                        htype="$(printf '%s\n' "${field_rows}" | awk -F'\t' -v n="${wname}" '$1 == n { print $2; exit }')"
-                        if ! printf '%s\n' "${field_rows}" | cut -f1 | grep -qxF "${wname}"; then
+                        htype="$(awk -F'\t' -v n="${wname}" '$1 == n { print $2; exit }' <<<"${field_rows}")"
+                        if ! grep -xF "${wname}" < <(printf '%s\n' "${field_rows}" | cut -f1) >/dev/null; then
                             missing_fields="${missing_fields}${missing_fields:+, }${wname}"
                         elif [ -n "${htype}" ] && [ "${htype}" != "${wtype}" ]; then
                             wrong_fields="${wrong_fields}${wrong_fields:+, }${wname} is ${htype}"
