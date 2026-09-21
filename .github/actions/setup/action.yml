@@ -66,7 +66,7 @@ runs:
         # renovate: datasource=pypi depName=yamllint
         YAMLLINT_VERSION=1.38.0
         # renovate: datasource=github-releases depName=mikefarah/yq extractVersion=^v?(?<version>.+)$
-        YQ_VERSION=4.44.3
+        YQ_VERSION=4.53.6
 
         runner_arch="${RUNNER_ARCH:-$(uname -m)}"
         case "$runner_arch" in
