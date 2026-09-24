@@ -42,6 +42,16 @@ environment — against the items below
 - [ ] macOS: add a Raycast quicklink/alias that opens the `evanharmon-site.code-workspace`
 - [ ] macOS (Bunch): scaffold the launcher with `task util:bunch-add` (if not generated at copier time), then `task util:bunch-install` to move it to iCloud and leave a `.meta/*.bunch` symlink (re-run install if missing)
 
+### Package-manager major upgrades
+
+Before approving a pnpm, npm, or yarn major in Renovate, read its migration
+guide. Approval creates the Renovate branch and PR; on that branch, update the
+`packageManager` declaration and any Corepack/bootstrap or CI setup together,
+regenerate the lockfile with that major, then run `task verify` before merging.
+If this repository intentionally remains on an older major, add a local
+Renovate package rule that disables only that package-manager update and state
+the compatibility reason in the rule's `description`.
+
 ## 2. GitHub repo settings
 
 - [x] **Automated settings** — run `task setup:github` (idempotent, safe to
@@ -64,11 +74,22 @@ environment — against the items below
       the collaborator grant above sets the ceiling, the PAT's repo list reaches it.
       Procedure: [guides/bot-account.md](guides/bot-account.md).
 - [x] Import the branch ruleset (see [architecture/branch-protection.md](architecture/branch-protection.md)) — do this once `build.yml`, `codeql.yml`, `devcontainer-build.yml` are on `main` so the required `verify`/`security`/`codeql-verify`/`devcontainer-verify` checks resolve. **Use the UI import:** Settings → Rules → Rulesets → **New ruleset ▸ Import a ruleset** → select `.github/Branch Protection Ruleset - Protect Main.json`. (Prefer the UI over `gh api … rulesets`: the API `POST` is not idempotent — re-running creates a duplicate ruleset — and currently rejects the `merge_queue` rule. To later change the ruleset, edit the existing one in the UI rather than re-importing.)
-- [ ] **[human-only] Add `closing-keywords` to the live branch ruleset** — after
-      the `closing-keywords` build job has reported once, edit the existing
-      main-branch ruleset in Settings → Rules → Rulesets and add that exact
-      required status check. Do not re-import the JSON solely for this change:
-      GitHub creates a duplicate ruleset rather than updating the live one.
+- [ ] **[human-only] Add `closing-keywords` to the live branch ruleset** —
+      **required, not optional, and no longer deferrable.** Until
+      harmon-init#1328 the guard was enforced *transitively*: the job sat in
+      `build.yml` and fed the aggregate `verify` check, so a failing guard
+      failed a check the ruleset already required. Splitting it into
+      `closing-keywords.yml` (so it can keep the `pull_request.edited` trigger
+      the build matrix must not have) removes that path — `needs:` cannot cross
+      workflows. A live ruleset that does not name `closing-keywords` therefore
+      enforces nothing, and a `copier update` cannot fix that for you, because
+      it does not mutate live rulesets. After the job has reported once, edit
+      the existing main-branch ruleset in Settings → Rules → Rulesets and add
+      that exact required status check. Do **not** re-import the JSON solely
+      for this change: GitHub creates a duplicate ruleset rather than updating
+      the live one. `task audit:ruleset` names a context the live ruleset is
+      missing — run it to confirm. (evanharmon1/harmon-init#1333 will automate
+      this as `task setup:ruleset`; until it lands the edit is by hand.)
 - [ ] **[human-only] Add `devcontainer-verify` to the live branch ruleset** — after
       the devcontainer build workflow has reported once on main, edit the existing
       main-branch ruleset in Settings → Rules → Rulesets and add that exact
@@ -350,6 +371,11 @@ environment — against the items below
 ## 3. Framework scaffolding (conventions-only template)
 
 - [x] Scaffold Astro: `pnpm create astro@latest . --template minimal` (or preferred template)
+- [ ] Add Wrangler as a devDependency: `pnpm add -D wrangler` — the deploy
+      workflows no longer set a separate Cloudflare Workers version input for
+      the deploy action (harmon-init#1347), so `cloudflare/wrangler-action`
+      deploys with whatever version this lockfile pins; Renovate's `npm
+      dependencies` group keeps it current like any other devDependency.
 - [x] Add the standard stack: Tailwind v4 (`@tailwindcss/vite`), zod, vitest, lucide
 - [ ] Move lint tooling into devDependencies (prettier, eslint, markdownlint-cli2,
       @commitlint/cli); switch the `lint:prettier` / `lint:markdown` `npx --yes`

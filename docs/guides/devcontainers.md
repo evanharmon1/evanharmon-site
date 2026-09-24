@@ -134,6 +134,50 @@ Prebuilt images are pulled from GHCR as a build cache
 (`ghcr.io/evanharmon1/evanharmon-site-devcontainer` / `ghcr.io/evanharmon1/evanharmon-site-devcontainer-dev`), so a warm rebuild
 is fast. A cache miss is non-fatal — it just rebuilds from the `Dockerfile`.
 
+## Bind-mounted checkout permissions
+
+`post-create-common.sh` reconciles the bind-mounted workspace's `.git`
+metadata tree on every attach: it reclaims ownership for the container
+user (keeping the tree's original group), grants that group read/write,
+sets directories setgid so new Git objects and refs stay group-writable
+too (`core.sharedRepository`), and never leaves the tree world-writable.
+
+**What this guarantees, and what it does not.** Write access after
+reconciliation is guaranteed for the container user and for anyone
+sharing the checkout's original group — in practice, same-uid re-attaches
+(a container rebuild reusing the same runtime user) and other containers
+or processes running as a group-mate. It does **not** extend trust to a
+genuinely different host identity: Git's own "detected dubious ownership"
+safety check is keyed on the file owner's uid, not on permission bits, so
+a host process running as a *different* uid than the container sees the
+reconciled checkout as owned by someone else regardless of the group
+permissions — the same check that made `a+rwX` (world-writable) tempting
+in the first place, and the reason this reconciliation never reintroduces
+it. It is also a deliberate non-goal for a workspace root that is itself a
+Git submodule or a `--separate-git-dir` checkout, rather than a linked
+worktree: Git gives that shape no reverse pointer to validate a redirect
+against, so the privileged mutation is skipped there (with a logged reason)
+instead of trusting it, and the workspace still becomes usable without the
+ownership repair. The reconciliation can only write its `safe.directory` trust entry
+into the container's own environment-scoped Git config
+(`.devcontainer/scripts/post-create-common.sh`'s `$ENV_GITCONFIG`), a
+location a separate host machine's own Git installation has no way to
+read.
+
+**If a different-uid host needs to run Git directly against the same
+checkout** (outside any container — for example a host-side terminal or
+Git client, not a devcontainer attach), it needs its own one-time trust
+entry:
+
+```sh
+git config --global --add safe.directory /path/to/the/checkout
+```
+
+Run that once, as the host user, against the exact path the checkout is
+mounted at. It only grants that one path, never a wildcard, and it is
+independent of the container's own reconciliation — repeat it if the
+checkout is ever re-cloned to a new path.
+
 ## Claude Code settings in the container
 
 Everything is sourced from `.devcontainer/config/` and baked into the **image**,
@@ -162,6 +206,24 @@ The practical consequence when troubleshooting: for an optional hook, the copy
 under `/etc/claude-code/hooks/` is **not** the one that runs. Inspect or replace
 the staged copy, and check `managed-settings.json` for the path actually
 registered rather than assuming it.
+
+### Managed PreToolUse hooks (`protect-files.sh`)
+
+The container registers mandatory PreToolUse hooks under `/etc/claude-code/hooks/`.
+Among them, `protect-files.sh` intercepts file edits (`Edit|Write|MultiEdit` in Claude Code,
+and via `/etc/codex/hooks/file-payload.sh` in Codex) to safeguard sensitive credentials and configuration:
+
+- **Protected set (credential-shaped paths only):**
+  - Substring patterns: `.claude/settings.json`, `.codex/config.toml`, `/etc/claude-code/`, `/etc/codex/`
+  - Suffix/glob patterns: `*.pem`, `*.key`, and the `.env` family where the basename starts with `.env` (such as `.env`, `.env.local`, `.envrc`) or ends with `.env` (such as `prod.env`).
+- **Permitted paths:** Repository files and workflow state — including `.git/` (such as dev-flow v2
+  run records in `.git/dev-flow-v2/` and deferred findings in `.git/deferred-findings/`), package
+  lockfiles (`package-lock.json`, `uv.lock`), build and dependency artifacts (`node_modules/`, `dist/`),
+  IaC state (`.terraform/`, `.tfstate`), and media/PDF files — are intentionally not blocked by this hook.
+
+The hook script lives at `.devcontainer/config/claude-hooks/protect-files.sh` in the repository.
+Because `/etc/claude-code/hooks/protect-files.sh` is baked into the container image at build time,
+changes to the hook source take effect inside a container on devcontainer rebuild.
 
 The last row is the one exception, and deliberately so: `~/.claude/settings.json`
 is volume-backed because Claude Code writes your in-app changes there. Every
@@ -215,11 +277,20 @@ at it — the seed merge will not overwrite it or add `refreshInterval`.
 
 ## Codex CLI settings in the container
 
-Codex policy is baked at `/etc/codex/managed_config.toml` from
-`config/codex-managed-config.toml`; its shared hook adapters are installed under
-`/etc/codex/hooks/`. The config pins Sol/medium, loads the standard project
-skills from `.agents/skills`, and renders a compact built-in footer with project,
-branch, model/effort, context, quota, token, and run-state fields. Unlike
+Codex settings arrive as **two** layers, and the split is load-bearing.
+Boundary policy is baked at `/etc/codex/managed_config.toml` from
+`config/codex-managed-config.toml` — Codex's legacy MDM layer, where every key
+is an unoverridable requirement that beats `-c`, `~/.codex/config.toml` and a
+trusted project `.codex/config.toml` without saying so. Only the sandbox and
+approval boundary and the image-owned hooks belong there. Overridable defaults
+— model, reasoning effort, the project-instruction budget and the status line —
+are baked at `/etc/codex/config.toml` from `config/codex-system-config.toml`,
+so an agent or orchestration session can raise the effort for one run. Pinning
+those in the managed layer silently downgraded dispatched workers instead.
+Together they default to Sol/medium, load the standard project skills from
+`.agents/skills`, and render a compact built-in footer with project, branch,
+model/effort, context, quota, token, and run-state fields. Its shared hook
+adapters are installed under `/etc/codex/hooks/`. Unlike
 Claude's renderer, Codex's supported status line is a single ordered list rather
 than an external multi-line command. System-managed Codex hooks are limited to
 image-owned policy scripts; checkout-controlled status and formatter tasks stay
@@ -561,6 +632,37 @@ captures the same variables from the **host environment**, where they arrive as
 workspace/template parameters. It does **not** call `op` itself — 1Password
 Environments is what supplies the values locally.
 
+A variable already in the env-file but absent from the host env is **left
+alone** — that is how a 1Password-managed value survives a rebuild when you
+haven't also exported it in your shell.
+
+If a variable is missing from **both** places, though, nothing will supply it,
+and `init-env.sh` prints a warning to stderr naming the variables (never their
+values) in the container-build log:
+
+```text
+init-env.sh: warning: allow-listed but unset in the host env and absent from .devcontainer/dev/devcontainer.env:
+init-env.sh:   TS_AUTHKEY
+init-env.sh: the container will start without them. On Coder/Codespaces set them as
+init-env.sh: workspace/repo secrets; locally populate the env-file from 1Password.
+```
+
+**This warning is not itself a failure.** `initializeCommand` runs on the host,
+where a non-zero exit aborts the whole build, so a missing optional secret must
+not block a rebuild there — it is a signal to read.
+
+What happens next depends on the secret. For most, the container comes up clean
+and only the dependent step fails later, far from the cause.
+That includes `TS_AUTHKEY`. The dev profile installs Tailscale and still
+connects whenever a key is present — a missing one is a skip, not a failure, so
+the container comes up either way. Answer `tailscale_required` at scaffold time
+to make it fatal instead: worth it for a profile whose whole point is the
+tailnet, where a container that starts up logged out is easy to miss for hours.
+
+The warning covers **only** the vars this profile's allow-list permits, so the
+bot profile never reports `TS_AUTHKEY` missing. Its absence there is correct —
+that profile has no tailnet path at all — and naming it would advertise a
+credential the bot container must never hold.
 ## Run it in Coder
 
 The devcontainers are Coder-ready: the `CODER` env is passed through, the
@@ -581,7 +683,8 @@ repo** (one template serves every repo). To stand this repo up in Coder:
    - secrets → `CLAUDE_CODE_OAUTH_TOKEN`, `AGENT_DECK_TELEGRAM_KEY`, and
      `GH_TOKEN` **for a bot workspace only** — a dev workspace runs
      `gh auth login` instead
-     (+ `TS_AUTHKEY` if you want Tailscale); `KIMI_API_KEY`/`MOONSHOT_API_KEY`,
+     (+ `TS_AUTHKEY` if you want Tailscale — without it the dev profile
+     simply skips the tailnet connect); `KIMI_API_KEY`/`MOONSHOT_API_KEY`,
      `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `QWEN_API_KEY` for the alt-model wrappers
      (`claude-qwen-local` needs no key — see below). Coder passes these
      into the workspace's host environment, where `init-env.sh` picks them up.

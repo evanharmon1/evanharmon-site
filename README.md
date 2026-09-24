@@ -49,7 +49,7 @@ CodeQL checks.
 ├── .claude/             # Claude Code settings + skills
 ├── .devcontainer/       # Dual-profile devcontainer (AI bot + dev/ human)
 ├── .github/             # Workflows, templates, CODEOWNERS, branch ruleset
-├── docs/                # Documentation (see docs/README.md)
+├── docs/                # Documentation (see docs/index.md)
 ├── scripts/             # Repo utility scripts (hygiene, status, summaries)
 ├── specs/               # Specifications
 ├── tests/               # Tests
