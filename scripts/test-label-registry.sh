@@ -79,7 +79,7 @@ cp label-registry.schema.json "$mutation_tmp/label-registry.schema.json"
 
 rejects() {
     local description="$1" mutation="$2" expected="$3" output
-    if ! node --input-type=module - label-registry.json "$mutated_manifest" "$mutation" <<'NODE'; then
+    if ! node --input-type=module - label-registry.json "$mutated_manifest" "$mutation" <<'NODE'
 import { readFile, writeFile } from 'node:fs/promises'
 
 const [inputPath, outputPath, mutation] = process.argv.slice(2)
@@ -126,6 +126,7 @@ switch (mutation) {
 
 await writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`)
 NODE
+    then
         fail "could not build mutation: $description"
         return
     fi
@@ -1148,8 +1149,7 @@ else
     echo "note: docs/project-management.md not present in this profile — skipping the docs binding" >&2
 fi
 if [ "$template_mode" = 1 ]; then
-    open_tag='[%'
-    template_doc="template/docs/${open_tag} if project_management == 'github' %]project-management.md${open_tag} endif %].jinja"
+    template_doc="template/docs/[%""if project_management == 'github' %]project-management.md[%""endif %].jinja"
     if [ -f "$template_doc" ]; then
         check_docs "$template_doc" template/label-registry.json --jinja
     else
