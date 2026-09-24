@@ -51,7 +51,6 @@ foil-stamped ornaments.
   separators), leaf `❧` (seals, divider sides).
 - **Printed grain** — a fine, irregular film grain laid over every surface that
   **scrolls with the page** (it is part of the material, not a screen filter).
-
 ---
 
 ## 2. Colour
@@ -267,3 +266,9 @@ animation is gated behind `prefers-reduced-motion`.
 - Use sans-serif for body copy.
 - Fix the grain to the viewport.
 - Float cards on soft drop shadows.
+
+---
+
+Significant or hard-to-reverse design choices get an ADR in
+[`docs/decisions/`](docs/decisions/index.md). Deviating from a rule here is allowed when
+justified — record *why* in an ADR rather than silently drifting.

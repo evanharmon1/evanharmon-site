@@ -2,11 +2,12 @@
 
 A second AI model — the [OpenAI Codex CLI](https://developers.openai.com/codex/cli)
 — reviews changes in this repo: manual review/challenge tasks, plus an optional
-automatic Claude Code → Codex stop-gate. Everything is local and advisory:
-nothing runs in CI, no PR check depends on Codex, and `verify`/`ci` never
-invoke it. Findings are hypotheses for the primary agent to adjudicate — the
-protocol and the loop caps live in AGENTS.md ("Second-Model
-Review").
+automatic Claude Code → Codex stop-gate. Those tasks are local and advisory:
+nothing runs in CI, no PR check depends on Codex, and `verify`/`ci` never invoke
+it. Repositories can separately opt into a required current-head result from
+Codex cloud review during the integration stage. Findings are hypotheses for the
+primary agent to adjudicate — the protocol and the loop caps live in AGENTS.md
+("Second-Model Review").
 
 ## Setup
 
@@ -32,15 +33,15 @@ Review").
    ```
 
 5. **If `use_codex_cloud_review` is enabled, connect this repository to Codex
-   cloud review for PR shepherding.** The Copier opt-in adds the policy but
+   cloud review for PR integration.** The Copier opt-in adds the policy but
    cannot grant GitHub access: a maintainer must connect Codex through ChatGPT
    and allow the repository in the GitHub connector. Availability and quotas
    depend on the maintainer's ChatGPT plan, and private repositories require
-   explicit connector access. Cloud review is a required shepherd signal, not
+   explicit connector access. Cloud review is a required integration signal, not
    a required GitHub status check; if it stays unavailable for both bounded
    attempts, the agent stops and escalates. Where Foreman is also enabled,
    `.foreman.toml`'s `[reviewer]` table holds the same contract for
-   foreman-shepherded PRs: foreman posts the configured `@codex review`
+   Foreman-integrated PRs: foreman posts the configured `@codex review`
    request itself and promotes a draft only on a current-head result from the
    configured login — fail-closed, with bounded attempts.
 
@@ -211,37 +212,44 @@ task challenge  # adversarial second model — adjudicate, fix, re-challenge
 task review     # verification checkpoint — same convergence rule, under its
                 # own resolved review cap
 task security   # Semgrep CE + gitleaks + dependency audit — pre-publication gate
-# → open a DRAFT PR, then shepherd it: watch CI + reviews, settle the deferred
-#   P2s, adjudicate → fix → push, under the shepherd cap (independent of the
-#   loops above)
+# → open a DRAFT PR, then integrate it: watch CI + reviews, settle the deferred
+#   P2s, adjudicate → fix → push, under the integration and remediation caps
+#   (independent of the loops above)
 # → readiness gate passes → gh pr ready (the handoff to a human)
 # → merging stays a human decision
 ```
 
-The full staged loop — including the PR-shepherding rounds and the readiness
+The full staged loop — including the PR integration rounds and the readiness
 gate that ends them — is defined in AGENTS.md ("Dev Loop"). The PR is a
 **draft** for every stage above: it is the agent's workbench, and promoting it
 is the one signal that the automated work is finished.
 
 The caps are not written down here, or in AGENTS.md. They live in
-[`.devflow.toml`](../../.devflow.toml): a `rigor` level resolves to a
-`[rounds.*]` policy that sets `challenge`, `review`, `integration`, `remediation`,
-and `min_rounds` together, and **AGENTS.md alone defines how a change resolves
+[`.devflow.toml`](../../.devflow.toml): a `rigor` level selects a
+`[rigor.<level>]` profile pointing to a `[rounds.*]` policy that sets
+`challenge`, `review`, `integration`, and `remediation` ceilings plus
+`min_rounds`, and **AGENTS.md alone defines how a change resolves
 one** — restating that chain here would only give it a second place to drift
 from, and which inputs are even available depends on how the repository is
-set up. All five numbers move together with the resolved policy —
-`integration` and `remediation` bound different kinds of work than confidence passes:
-external findings (CI, human review, Codex) and remediation fix pushes rather than work
-the agent generated itself, and a cap of 0 for integration means the very first thing that needs
-an answer is already at the cap, not that the integration stage's other
-obligations (watching CI, the readiness gate) go away. Announce the resolved
-profile — caps and floor included — when you enter the loop.
+set up. Challenge and review bound confidence passes; `integration` bounds
+current-head Codex review cycles; `remediation` bounds integration-stage fix
+pushes. These numbers move together with the resolved policy, and a cap of 0
+disables only the work it names, never a deterministic gate, a security scan, or
+the other readiness-gate conditions — under an `integration` cap of 0 only the
+current-head Codex condition drops out, exactly as `AGENTS.md` § Readiness gate
+states; CI, thread replies, and the rest still apply. Announce
+the resolved profile — caps and floor included — when you enter the loop.
 
 If Codex cloud review is connected to the repo, PRs
 get a cloud pass too: inline comments only for high-priority findings, a
 👍 from the pinned Codex bot actor ID `199175422` on the exact
 `@codex review` trigger comment as the clean pass. That reaction must post
-after both the current head was pushed and its review request was created.
+after both the current head was pushed and its review request was created —
+with one exception: where the integration stage implements **carry**, a clean
+verdict on an earlier head (a 👍 included) also attests a head that moved only
+by a base catch-up merge leaving the change's canonical diff byte-identical, so
+no new request is made for that head. `AGENTS.md` § "Dev Loop" (the
+current-head Codex contract) states the condition and when carry is active.
 Those requests are explicit and made while the PR is draft — which is why
 Automatic reviews must be off (setup step 6): an automatic review triggered by
 `gh pr ready` would land after the gate that promoted the PR.
@@ -321,7 +329,7 @@ resolved it — and persistent
 P0/P1 disagreement at the cap is escalated rather than iterated on. And the
 deferred-P2 chain is a **precondition** of the exit, not a casualty of it:
 every P2 open at convergence must already be in the sidecar below, so
-`gh pr create` can move it into the PR body and the shepherd can settle it. An
+`gh pr create` can move it into the PR body and the integration stage can settle it. An
 exit that drops a P2 is not an exit.
 
 ## Finding priorities
@@ -369,7 +377,7 @@ Nothing in that depends on which reviewer produced the badge, so no
 provenance rule is needed: an under-labelled finding is caught by adjudicating
 it, wherever it came from.
 
-**The mechanism belongs to the shepherd stage, not to this prose.** How a
+**The mechanism belongs to the integration stage, not to this prose.** How a
 cloud finding is answered depends on the surface it landed on, and `AGENTS.md`
 is the authority — it carries both procedures, because a repository can answer
 `use_codex_review` yes and `use_skills_sync` no, which renders this guide with
@@ -377,8 +385,7 @@ no vendored checker at all. Follow whichever of the two applies to your
 checkout; nothing below overrides it.
 
 **Where the pinned checker is vendored**
-(`.claude/skills/integrate/assets/check-codex-cloud-review.sh` or
-`.claude/skills/shepherd/assets/check-codex-cloud-review.sh`), its exit codes
+(`.claude/skills/integrate/assets/check-codex-cloud-review.sh`), its exit codes
 are the contract. Two things about it are worth knowing because they are not
 symmetric:
 
@@ -402,7 +409,7 @@ indefinitely over a `settle` call your checkout has no way to make would be
 the wrong reading.
 
 P2s are **reported, adjudicated, and deferred**, never suppressed: they carry
-to the PR-shepherd stage, where they are fixed, declined with reasoning, or
+to the PR integration stage, where they are fixed, declined with reasoning, or
 filed as follow-up issues. That keeps the expensive local loops focused on
 what actually blocks a merge, without losing the smaller findings.
 
@@ -465,11 +472,11 @@ worse than none, because a dirty tree puts it in the next bare
 `task challenge`'s scope: a file of open findings, handed to the reviewer as
 part of the change to adjudicate.
 
-The shepherd stage settles every entry and ticks it off in the body as it
+The integration stage settles every entry and ticks it off in the body as it
 goes, so the checkbox — not anyone's memory — is what says whether a finding
 is still open. The PR is not green while an unchecked entry remains.
 AGENTS.md ("Dev Loop") carries that obligation, so it holds even where the
-optional `/shepherd` skill that automates it is not installed.
+optional integration skill (`/integrate`, or the retired `/shepherd` at an older pin) that automates it is not installed.
 
 Note that the automatic stop-gate is not on this scale — the plugin's Stop
 hook uses its own notion of a material finding and may BLOCK on a P2.
@@ -490,6 +497,71 @@ Adjudicate it; never disable the gate to get past a BLOCK.
 - **Gate enabled but nothing happens** — `task codex:gate:status`; remember
   the flag is per workspace path (worktrees toggle separately) and fails open
   when Codex is unavailable.
-- **Nothing to review** — a clean tree with no commits beyond the base exits
-  early; pass `--base <ref>`, `--uncommitted`, or `--commit <sha>` to pick
-  the target explicitly.
+- **Nothing to review** — the resolved target is empty, so the run refuses
+  (exit 1) instead of asking Codex to review nothing; the message names the
+  condition and the way out. Reaching it from `task challenge` with no flags
+  means a clean tree with no commits beyond the base. Reaching it from
+  `--base <ref>` usually means the work is still uncommitted — drop the flag
+  to review both halves, or use `--uncommitted`.
+- **Could not resolve a base to review this branch against** — no
+  `origin/HEAD` and no local `main`/`master`, or the detected base shares no
+  history with `HEAD` (exit 2). It refuses on a dirty tree too, rather than
+  quietly reviewing the worktree alone: which commits are missing is exactly
+  what cannot be determined, and a partial review that exits 0 reads as a
+  clean pass. Fix the cached ref (`git remote set-head origin --auto`), name a
+  base with `--base <ref>`, or say the worktree really is the whole target
+  with `--uncommitted`.
+- **A captured log is enormous, and the verdict is buried** — the CLI logs
+  some errors with the entire API response inlined, so one line can run to
+  hundreds of kilobytes and a retry loop repeats it. `codex-review.sh` bounds
+  each **stderr** line to `CODEX_REVIEW_MAX_STDERR_BYTES` (default 1024) and
+  marks what it cut; stdout, where the verdict is, is never filtered. Set the
+  variable to `0` to capture a payload in full when debugging the CLI itself.
+  A recurring dump usually means the CLI is older than the API it is talking
+  to — compare `codex --version` against the version your devcontainer image
+  ships, and rebuild or pull a newer image if it lags.
+- **A requested `-c` override is silently ignored, and the run header shows a
+  different value** — if this repo ships the devcontainer, it installs two
+  Codex config layers, and only one of them is overridable:
+
+  | File | Layer | Overridable? |
+  | --- | --- | --- |
+  | `/etc/codex/config.toml` | system **defaults** (`codex-system-config.toml`) | yes |
+  | `/etc/codex/managed_config.toml` | legacy MDM **requirements** (`codex-managed-config*.toml`) | **no** |
+
+  Every key in the managed layer is a hard requirement: it outranks `-c`,
+  `~/.codex/config.toml`, and a trusted project `.codex/config.toml` alike,
+  without logging that it overrode anything. The explicit `-m` flag was the
+  one model override that still took effect, which is why a pinned `model`
+  looked half-working rather than plainly broken. That is
+  deliberate for `sandbox_mode` and `approval_policy`, which nothing should be
+  able to relax — and it is why model, reasoning effort, the project-doc
+  budget, and the TUI status line live in the defaults layer instead. Pinning
+  reasoning effort in the managed layer makes every worker dispatched at a
+  higher effort silently run at the pinned one.
+
+  Read the run header rather than trusting the request — it reports what the
+  run will actually use:
+
+  ```sh
+  # 2>&1 is load-bearing: codex exec writes the run header to stderr and only
+  # the assistant's reply to stdout, so a stdout-only pipeline prints nothing.
+  codex exec -c 'model_reasoning_effort="xhigh"' --skip-git-repo-check \
+      'Reply with exactly: ok' 2>&1 | grep -iE '^model:|reasoning effort'
+  ```
+
+  If the header disagrees with what you asked for, read the **live** file the
+  container is actually using — not the checkout:
+
+  ```sh
+  grep -nE '^[[:space:]]*"?(model|model_reasoning_effort)"?[[:space:]]*=' \
+      /etc/codex/managed_config.toml
+  ```
+
+  Any hit there is the cause. `task test:devcontainer:permissions` checks the
+  repository's copies and will not catch this on its own: a container built
+  before the split keeps the old `/etc/codex/managed_config.toml` no matter what
+  the checkout says, so the check passes while the running container still pins
+  the effort. Rebuild the container once the files are right. Effort levels are not model-specific: under a ChatGPT-account login on
+  the pinned CLI, `low`, `medium`, `high`, and `xhigh` all take effect for
+  every supported model once the key is out of the managed layer.

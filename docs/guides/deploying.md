@@ -2,7 +2,7 @@
 
 How to deploy Evan Harmon Website. For the shape of the CI/CD pipeline see
 [../architecture/ci-cd.md](../architecture/ci-cd.md); for production operational
-procedures and rollback runbooks see [../runbooks/](../runbooks/).
+procedures and rollback runbooks see [../runbooks/](../runbooks/index.md).
 
 The site is served by the `evanharmon-site` **Cloudflare Worker** (static
 assets, configured in [`wrangler.jsonc`](../../wrangler.jsonc)). All deploys
@@ -49,7 +49,7 @@ Build the production bundle with `task build` first.
 ## Rollback
 
 TODO: how to roll back a bad deploy. Capture the production procedure as a
-runbook in [../runbooks/](../runbooks/).
+runbook in [../runbooks/](../runbooks/index.md).
 
 ## Configuration & secrets
 
