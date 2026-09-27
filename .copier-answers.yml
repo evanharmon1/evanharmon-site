@@ -1,9 +1,9 @@
 # Changes here will be overwritten by Copier
-_commit: e8735ac0592e245051e41f18593a58c048c66021
+_commit: v4.46.0
 _src_path: https://github.com/evanharmon1/harmon-init
 bunch_add: false
 ci_runner: ubuntu-latest
-claude_authorized_members: evanharmon1
+claude_authorized_members: evanharmon1,evanharmon1-bot,admiralfraggle,admiralfraggle-bot
 code_owner: evanharmon1
 codeql_languages:
 - javascript-typescript
@@ -30,6 +30,7 @@ run_task_install: false
 skill_categories:
 - universal
 - frontend
+- matt-pocock
 snyk_scan_schedule: weekly
 tailscale_required: false
 use_alternative_claude_providers: true
