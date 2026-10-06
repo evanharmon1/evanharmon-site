@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.5](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.4...v0.3.5) (2026-10-06)
+
+
+### Bug Fixes
+
+* **security:** resolve audit vulnerabilities and update astro-eslint-parser ([#97](https://github.com/evanharmon1/evanharmon-site/issues/97)) ([317c6fa](https://github.com/evanharmon1/evanharmon-site/commit/317c6fa2bd08ba06a0b7fca17755bcba4e599601))
+* sync harmon-devkit skills to v0.50.0 ([#90](https://github.com/evanharmon1/evanharmon-site/issues/90)) ([892fc16](https://github.com/evanharmon1/evanharmon-site/commit/892fc165121935dd629efc2252df84b49166494c))
+
 ## [0.3.4](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.3...v0.3.4) (2026-09-24)
 
 
