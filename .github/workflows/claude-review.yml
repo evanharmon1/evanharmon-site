@@ -275,7 +275,7 @@ jobs:
           trigger_phrase: "@claude review"
           track_progress: true
           use_sticky_comment: true
-          allowed_bots: "renovate[bot],dependabot[bot]"
+          allowed_bots: "renovate[bot],coderabbitai[bot],dependabot[bot]"
           base_branch: main
           branch_prefix: claude/
           # --max-budget-usd caps API-key spend; likely a no-op under
