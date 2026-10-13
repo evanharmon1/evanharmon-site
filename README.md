@@ -91,7 +91,7 @@ same `task` targets as local hooks.
 
 | Workflow | Purpose |
 |---|---|
-| `build.yml` | lint, build-test, e2e, lighthouse, security → aggregate `verify` gate |
+| `build.yml` | lint, build-test, e2e, lighthouse, render-parity, security → aggregate `verify` gate |
 | `codeql.yml` | CodeQL SAST: automatic and free for public repos; private/internal repos require GitHub Code Security + `FULL_SECURITY_SCAN=true` |
 | `snyk-scheduled.yml` | Optional weekly Snyk SAST/SCA second opinion; advisory and never a required PR check |
 | `devcontainer-build.yml` | Prebuilds devcontainer images to GHCR on merge to main |

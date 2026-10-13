@@ -67,13 +67,19 @@ the compatibility reason in the rule's `description`.
       `scripts/setup-github.sh` with `--replace-ci-runs-on`. Do not add
       `dependabot.yml`: Renovate owns routine
       and vulnerability-remediation PRs; Dependabot owns advisory alerts.
-- [ ] **Bot PAT** — the agent's `GH_TOKEN`. If a fine-grained PAT already covers
+- [ ] Import the branch ruleset (see [architecture/branch-protection.md](architecture/branch-protection.md)) — do this once `build.yml`, `codeql.yml`, `devcontainer-build.yml` are on `main` so the required `verify`/`security`/`codeql-verify`/`devcontainer-verify` checks resolve. **Use the UI import:** Settings → Rules → Rulesets → **New ruleset ▸ Import a ruleset** → select `.github/Branch Protection Ruleset - Protect Main.json`. (Prefer the UI over `gh api … rulesets`: the API `POST` is not idempotent — re-running creates a duplicate ruleset — and currently rejects the `merge_queue` rule. To later change the ruleset, edit the existing one in the UI rather than re-importing.) **Import it before provisioning the bot and agent PATs below:** those postures carry no local merge guard, so this ruleset's code-owner approval and required checks are the only thing between their PAT and an unreviewed merge into `main`.- [ ] **Bot PAT** — the agent's `GH_TOKEN`. If a fine-grained PAT already covers
 `evanharmon1`,
       just add this repo to its **selected repositories**; a token is scoped to one
       resource owner, so a **new owner needs a new PAT**. Both layers are required —
       the collaborator grant above sets the ceiling, the PAT's repo list reaches it.
       Procedure: [guides/bot-account.md](guides/bot-account.md).
 - [x] Import the branch ruleset (see [architecture/branch-protection.md](architecture/branch-protection.md)) — do this once `build.yml`, `codeql.yml`, `devcontainer-build.yml` are on `main` so the required `verify`/`security`/`codeql-verify`/`devcontainer-verify` checks resolve. **Use the UI import:** Settings → Rules → Rulesets → **New ruleset ▸ Import a ruleset** → select `.github/Branch Protection Ruleset - Protect Main.json`. (Prefer the UI over `gh api … rulesets`: the API `POST` is not idempotent — re-running creates a duplicate ruleset — and currently rejects the `merge_queue` rule. To later change the ruleset, edit the existing one in the UI rather than re-importing.)
+- [ ] **[human-only] Agent PAT** — only if this repo allows unattended remote
+      lanes (the agent devcontainer, `.devcontainer/agent/`). A **separate**
+      fine-grained PAT on the bot account, same permissions as the bot's, expiry
+      of 180 days at most, its own repository list, one per resource owner;
+      supplied as `AGENT_GH_TOKEN`, never as `GH_TOKEN`. Procedure:
+      [guides/devcontainers.md](guides/devcontainers.md) (agent posture).
 - [ ] **[human-only] Add `closing-keywords` to the live branch ruleset** —
       **required, not optional, and no longer deferrable.** Until
       harmon-init#1328 the guard was enforced *transitively*: the job sat in
@@ -216,29 +222,42 @@ the compatibility reason in the rule's `description`.
       Personal account: use `--repo evanharmon1/evanharmon-site` instead of
       `--org`/`--visibility`/`--repos`. Re-running `--repos` **replaces** the list —
       re-run with the full list to add a repo. Drives release-please, the claude-*
-      workflows, and project-automation; blast-radius + rotation in
+      workflows, the daily `security-audit-fix.yml` remediation PR, and project-automation; blast-radius + rotation in
       docs/architecture/security.md.
 - [x] GHCR: ensure the org/user allows publishing packages; the first
       devcontainer prebuild populates `ghcr.io/evanharmon1/evanharmon-site-devcontainer` on merge to main
 - [x] GitHub Project: run `task setup:github-project` (needs
       `gh auth refresh -s project`) to create the owner's default project (titled
-      `evanharmon1 Project`) and idempotently sync its `Status` pipeline and
-      `Size` number field — see
-      [project-management.md](project-management.md).
-      On a personal account it also creates Priority/Product/Size as project
-      fields (issue fields are org-only; there is deliberately no Domain or
-      Layer field — see [project-management.md](project-management.md), "Label
-      or field?"); status automation is a separate follow-up — the board is set
-      up, but issue/PR status isn't auto-synced yet. Re-runs **append** any
-      starter option a single-select field is missing (so a value added by a
-      later harmon-init release lands on the next run) and never touch,
-      reorder, or delete the options you added.
+      `evanharmon1 Project`) and idempotently sync its `Status` pipeline —
+      see [project-management.md](project-management.md).
+      On a personal account it also creates Product as a project field (issue
+      fields are org-only; there is deliberately no Priority, Size, Domain, or
+      Layer field — see [project-management.md](project-management.md),
+      "Fields" and "Label or field?"); status automation is a separate
+      follow-up — the board is set up, but issue/PR status isn't auto-synced
+      yet. Re-runs **append** any starter option the Status field is missing
+      (so a value added by a later harmon-init release lands on the next run)
+      and never touch, reorder, or delete the options you added.
 - [ ] **Upgrading from a release before harmon-init#875?**
       If this repo's board still carries `Domain`/`Layer` fields from an
       earlier release, they are not deleted automatically.
       Retiring them is a deliberate, irreversible operator step — see
       [project-management.md](project-management.md), "Migrating a board that
       still has one."
+- [ ] **[human-only] Delete the `Priority` and `Size` project fields on an
+      existing board** — only if this repo's board was set up by a release
+      before harmon-init#1451; they are not deleted automatically, and
+      deleting a field destroys every value on it, unrecoverably. Do it after
+      the classification labels exist (on a personal account,
+      `task setup:github-labels` provisions the `priority:*` labels that
+      replace `Priority`, plus `priority-ai:*` for the AI's separate
+      suggestion beside it) and
+      after enumerating every board and view that references each field
+      (harmon-init#910), as [project-management.md](project-management.md),
+      "Migrating a board that still has one" (the Priority / Size entry) lays
+      out. On a personal account both fields go; on an organization only `Size`
+      was ever a project field — its `Priority` is GitHub's built-in issue
+      field and stays.
 - [ ] **Upgrading from a release before harmon-init#1047
       (`method:*` → `strategy:*`)?** Run `task setup:github-labels` first so
       the `strategy:*` destinations exist, then use the read-only report and
@@ -256,7 +275,18 @@ the compatibility reason in the rule's `description`.
       is product-independent and normally needs no edits. Labels are per-repo,
       so run it in each repo; org default labels (org Settings → Repository,
       UI-only) only seed new repos.
-- [ ] **After a `copier update` that adds label families** (e.g. `tier:*` — a
+- [ ] **[human-only] Pin any hand-applied Tier before the first classification
+      write** — on an existing repository an unqualified `tier:<value>` label
+      used to be a human's implementer override; it is now the cache automation
+      rewrites. On an unpinned issue with Risk and Complexity set, a writer of
+      those axes (such as the triage skill, once its pin carries
+      harmon-devkit#1250) adds the derived Tier and removes every other tier
+      label.
+      The classification reconciler does the same on its schedule (daily on a
+      personal-account repository, monthly on an organization one).
+      Before that first write, add `tier:pinned` to each open issue whose
+      hand-set tier label you want to keep.
+- [ ] **After a `copier update` that adds label families** (e.g. `impact:*` — a
       pure addition), re-run `task setup:github-labels` to provision the new
       labels here — it is additive and never deletes, so existing labels and
       the issues they sit on are untouched — then classify open issues with the
@@ -281,11 +311,17 @@ the compatibility reason in the rule's `description`.
       run. `--report-unregistered` is read-only, but its counts are a snapshot;
       run it again immediately before `--prune`.
 
+      `suggest:*` (superseded by the derived Tier) and `tier:adaptive` (no rung
+      on the Tier scale) have no `--migrate` destination, and the command
+      refuses one: remove the label from every issue, pull request and
+      discussion that carries it (an issue then resolves through its derived
+      Tier), then run `--prune`.
+
       For fixed-family sources, these mappings are authoritative:
       `agent:claude-code` → `claim:claude`, `agent:codex` → `claim:gpt`,
       `agent:gemini-cli` → `claim:gemini`, `agent:kimi-k2` → `claim:kimi`, `agent:qwen-code` →
-      `claim:qwen`, `suggest:codex` → `suggest:gpt`, and `claim:codex` →
-      `claim:gpt`. Pass one repeatable `--migrate OLD=NEW` per exact live
+      `claim:qwen`, and `claim:codex` → `claim:gpt`. Pass one repeatable
+      `--migrate OLD=NEW` per exact live
       source, together with `--prune`; for example,
       `./scripts/setup-github-labels.sh --repo <owner/repo> --prune
       --migrate agent:gemini-cli=claim:gemini`. `--migrate` does not match a
@@ -293,8 +329,8 @@ the compatibility reason in the rule's `description`.
       `OLD=NEW` form contains exactly one `=`; a label name containing `=` must
       be relabeled per record instead of passed to bulk migration. Move only
       the family segment for fixed mappings and preserve the recorded model
-      suffix, e.g. `suggest:codex:sol` → `suggest:gpt:sol` and
-      `claim:codex:sol` → `claim:gpt:sol`; model-level labels refine rather
+      suffix, e.g. `claim:codex:sol` → `claim:gpt:sol`; model-level labels
+      refine rather
       than replace their family-level label, and the command retains or adds
       both associations. If a recognized model-level
       destination is absent, the command creates it after confirmation by
@@ -310,7 +346,7 @@ the compatibility reason in the rule's `description`.
       shows the source has zero associations. Enumerate
       model-level names explicitly with `gh label list --repo <owner/repo>
       --limit 1000 --json name --jq '.[].name' | grep -E
-      '^(suggest|claim):(codex|copilot):'`; for each source, inspect all-state
+      '^claim:(codex|copilot):'`; for each source, inspect all-state
       `gh issue list --label <old> --state all --limit 1000` **and**
       `gh pr list --label <old> --state all --limit 1000`. An exactly-full
       manual result is capped; increase the limit and rerun before writes. The
@@ -319,16 +355,13 @@ the compatibility reason in the rule's `description`.
 
       Copilot is a broker, not a fixed family: `mai` is only the picker default
       and is never a guessed destination. Do **not** pass
-      `agent:github-copilot*`, `suggest:copilot*`, or `claim:copilot*` to bulk
+      `agent:github-copilot*` or `claim:copilot*` to bulk
       `--migrate` — the command rejects broker-derived sources because one
-      destination cannot represent mixed runtime records. For
-      `suggest:copilot`, there is no claim/session record: re-express each
-      issue/PR's planning intent as `suggest:<actual-family>` or drop the old
-      association; do not rename it to `suggest:mai`. For `claim:copilot`,
+      destination cannot represent mixed runtime records. For `claim:copilot`,
       inspect each issue/PR's claim/session record and relabel that record to
       `claim:<actual-family>`; use `claim:mai` only when the record confirms
       MAI. Apply the same per-record distinction to
-      `suggest:copilot:<model>`/`claim:copilot:<model>` and preserve a model
+      `claim:copilot:<model>` and preserve a model
       suffix only after the actual family is known. Include Discussions in that
       per-record inventory: the read-only report gives their association count,
       and the Discussions UI or GraphQL API identifies the records to relabel.
@@ -355,10 +388,11 @@ the compatibility reason in the rule's `description`.
       the operation as incomplete, reconcile live associations, and rerun in a
       new quiet window; do not infer association preservation from a successful
       exit alone; this is a guarded best-effort operation at that API boundary.
-- [ ] Project views: create the starter views (Board / Triage / Agent queue /
-      Planning / Mine) in the Project UI — Projects V2 has no view API,
-      so this is a one-time manual step. Filters/layouts are in
-      [project-management.md](project-management.md).
+- [ ] Project views: create the starter views that the Views section of
+      [project-management.md](project-management.md) specifies — including
+      Needs review and Human queue — in the Project UI. Projects V2 has no view
+      API, so this is a one-time manual step; the filters and layouts are in
+      that section.
 - [x] GitHub Project auto-add (**adds every issue to the board**): in the
       Project's **Settings → Workflows**, turn on **"Auto-add to project"** and
       point it at this repo (filter `is:issue`, `is:pr`) so *every* new issue and
@@ -384,12 +418,45 @@ the compatibility reason in the rule's `description`.
       `pnpm add -D eslint @eslint/js typescript-eslint eslint-plugin-astro globals`
 - [ ] Install the shipped prettier config's plugins:
       `pnpm add -D prettier prettier-config-standard prettier-plugin-astro prettier-plugin-tailwindcss`
+- [ ] If you set `compressHTML` in `astro.config.*` to anything other than its
+      default (`true`), update `astroCompressHTML` to match in
+      `prettier.config.cjs`'s `*.astro` override — `task test:astro-compress-parity`
+      (part of `task verify`) fails otherwise, and a mismatch lets a prettier
+      run reflow whitespace-sensitive inline markup into a visibly different
+      page (harmon-init#1350). Before merging a prettier/prettier-plugin-astro
+      bump, also run `task test:render-parity` — it builds the merge-base and
+      HEAD and diffs the rendered text, so it isn't part of `verify`.
 - [ ] Build-script approvals + version pins already ship in
       **`pnpm-workspace.yaml`** — the template pre-approves `esbuild` + `sharp`
       (and **`workerd`** when deploying to Cloudflare Workers, so `wrangler deploy`
-      doesn't fail `ERR_PNPM_IGNORED_BUILDS`) under `allowBuilds`, and floors
-      `esbuild` at the patched `>=0.28.1` under `overrides` (pnpm 10+ blocks
-      dependency build scripts by default). Add any other packages whose build
+      doesn't fail `ERR_PNPM_IGNORED_BUILDS`) under `allowBuilds` (pnpm 10+
+      blocks dependency build scripts by default). The `overrides` security-floor
+      block is template-owned and arrives via `copier update`; every floor is
+      scoped to the line it floors (`pkg@<major>` bounded below the next major,
+      or `pkg@0.<minor>` bounded below the next minor for 0.x); the block never
+      crosses a major. For 0.x, selectors cover only the fixture graph's tested
+      minors and bounds stop below the next minor of the moved version. A 0.x
+      minor is moved only where upstream published no in-minor patch and the
+      entry says so; the fixture toolchain builds with the moved versions. Other
+      0.x minor edges are left for consumer audit and a local floor after
+      validation. Add repository-local floors below its end marker, inside
+      `overrides`, using the same shape; quote a scoped package's key
+      (`'@scope/pkg@7': '>=7.0.1 <8'`) because YAML rejects a bare `@`. When a
+      later template version floors a release line you floored locally, delete
+      your local entry. After a template update changes the block, run
+      `pnpm install --no-frozen-lockfile` and commit `pnpm-lock.yaml` — pnpm
+      records the `overrides` in the lockfile, so a frozen install (for example,
+      the CI setup action, `scripts/setup-remote.sh`, `task worktree:new`, or
+      any shell with `CI` set) fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`
+      until the lockfile matches the block. Harmon Init's CI audits only the
+      Astro fixture graph against the shipped block, not the rest of a real
+      site's graph: an advisory in an adapter, MDX, sitemap, or Tailwind surfaces
+      in this repository's own `pnpm audit`, so floor it locally with
+      `task security:audit:fix` and report it upstream; an advisory on a
+      release line the block already floors (its `pkg@<major>` or
+      `pkg@0.<minor>` key) is refused there, so raise that one upstream
+      instead.
+      Add any other packages whose build
       scripts your deps need to `allowBuilds` (or run `pnpm approve-builds`); keep
       all pnpm `overrides` / `auditConfig` there too, **not** in the `package.json`
       `pnpm` field — pnpm 10+ silently ignores that field, so entries there vanish
@@ -446,9 +513,14 @@ the compatibility reason in the rule's `description`.
       `.env.example`-style files
 - [ ] Devcontainer secrets: create a **1Password environment** that mounts
       `.devcontainer/devcontainer.env` (and `.devcontainer/dev/devcontainer.env`)
-      with `GH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `AGENT_DECK_TELEGRAM_KEY`
-      (+ `TS_AUTHKEY` for the dev profile). `init-env.sh` enforces the per-profile
-      allow-list; on Coder the values come from workspace parameters. See
+      with `CLAUDE_CODE_OAUTH_TOKEN` and `AGENT_DECK_TELEGRAM_KEY`, plus
+      `GH_TOKEN` for the bot profile and `TS_AUTHKEY` for the dev one — the dev
+      profile carries no `GH_TOKEN` and runs `gh auth login` instead.
+      `init-env.sh` enforces the per-profile
+      allow-list; on Coder the values come from workspace parameters. The
+      agent posture's `.devcontainer/agent/devcontainer.env` takes only
+      `AGENT_GH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` (plus opted-in provider
+      keys) and refuses to build with anything else. See
       [guides/devcontainers.md](guides/devcontainers.md)
 
 ## 5. Docs & meta

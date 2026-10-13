@@ -13,45 +13,74 @@ minimumReleaseAgeExclude:
   - fast-uri@3.1.3 || 3.1.4
   - sharp@0.35.3
 
-# Security floor: esbuild <0.28.1 allows arbitrary file reads via the dev server
-# on Windows (GHSA; pnpm audit + Snyk). Astro/Vite still resolve 0.27.x — force
-# the patched line until they catch up.
-#
-# postcss <=8.5.17 is path traversal in the previous source map
-# (GHSA-r28c-9q8g-f849) and brace-expansion <=5.0.7 is DoS via unbounded
-# expansion (GHSA-mh99-v99m-4gvg). Both are transitive-only — postcss via
-# postcss-selector-parser, brace-expansion via minimatch under
-# @typescript-eslint/eslint. Both advisories are `high`, so
-# `task security:audit` (pnpm audit --audit-level=high) fails without these
-# floors, and brace-expansion has no patched 1.x — 5.0.8 is the first fix.
-#
-# minimatch is pinned WITH brace-expansion, not independently: minimatch@3
-# does `module.exports = expand` (the v1 shape), so lifting brace-expansion
-# alone breaks eslint with `TypeError: expand is not a function`. minimatch
-# @10.2.5 is the first release that depends on brace-expansion@^5, so the two
-# overrides have to move together. Drop them as a pair, never one at a time.
-#
-# The ranges are version-keyed so each override becomes a no-op once the
-# parents resolve a patched version on their own.
-#
-# Each replacement range is capped at the tested major (`<9`, `<6`, `<11`). An
-# unbounded `>=` would let a future major in silently the next time the lockfile
-# is regenerated — and an override genuinely does cross majors regardless of the
-# parent's own constraint, which is exactly how minimatch@3 became 10 here.
-# Raising a cap means re-running `task verify` on the new major first.
+# Security floors: raise them with `task security:audit:fix`, never raw
+# `pnpm audit --fix`. Even under pnpm 11, raw --fix keys each override by the
+# advisory's vulnerable range (`pkg@<1.2.3: ^1.2.3`) — an unbounded selector
+# that spans every earlier major instead of flooring the one you resolve — and
+# forces a new major when the patch exists only there (`pkg@<=8.5.1:
+# ^9.0.0`); it can also drop comments here, including the markers below. The
+# task writes bounded `pkg@<major>` floors below the end marker, re-resolves
+# the lockfile, and refuses (writing nothing) a fix that would cross a major.
 overrides:
-  esbuild: '>=0.28.1'
-  sharp: '>=0.35.5'
-  postcss@<8.5.18: '>=8.5.18 <9'
-  brace-expansion: '>=5.0.10 <6'
+  # --- harmon-init security floors (template-owned; updated by copier update) ---
+  # A 0.x minor is the semver breaking boundary. Selectors are version-scoped,
+  # not parent-scoped: every esbuild 0.27/0.28 edge and every sharp 0.34/0.35
+  # edge in the graph moves to the patched minor, whichever package declares
+  # it, because upstream published no in-minor patch. The minors chosen are
+  # the ones the Astro fixture graph resolves (Vite 8.3.4 declares
+  # ^0.27.0 || ^0.28.0 for esbuild; miniflare pins sharp 0.34), and the fixture
+  # toolchain builds with the moved versions. Other 0.x minors are left alone
+  # and show up in the consumer's audit for a local floor after validating.
+  # Esbuild's advisory covers dev-server file reads on Windows.
+  # esbuild@0.27: GHSA-gv7w-rqvm-qjhr.
+  esbuild@0.27: '>=0.28.1 <0.29'
+  # esbuild@0.28: GHSA-gv7w-rqvm-qjhr.
+  esbuild@0.28: '>=0.28.1 <0.29'
+  # sharp@0.34: GHSA-wq5f-xc86-pv6w, GHSA-rgj7-g3m4-5g8c, GHSA-f88m-g3jw-g9cj.
+  sharp@0.34: '>=0.35.5 <0.36'
+  # sharp@0.35: GHSA-wq5f-xc86-pv6w, GHSA-rgj7-g3m4-5g8c, GHSA-f88m-g3jw-g9cj.
+  sharp@0.35: '>=0.35.5 <0.36'
+  # source-map-js@1: GHSA-68fv-2mgg-jv7q.
+  source-map-js@1: '>=1.2.2 <2'
+  # devalue@5: GHSA-j22f-vq7h-c4qm, GHSA-mcm9-63f2-9j32.
+  devalue@5: '>=5.9.3 <6'
+  # http-cache-semantics@4: GHSA-ch52-4w7c-c8xp.
+  http-cache-semantics@4: '>=4.3.0 <5'
+  # brace-expansion@1: GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-rgw5-rvv9-x895, GHSA-mh99-v99m-4gvg, GHSA-3jxr-9vmj-r5cp, GHSA-q2hr-2g5m-vwhr.
+  brace-expansion@1: '>=1.1.21 <2'
+  # brace-expansion@2: GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-rgw5-rvv9-x895, GHSA-mh99-v99m-4gvg, GHSA-3jxr-9vmj-r5cp, GHSA-q2hr-2g5m-vwhr.
+  brace-expansion@2: '>=2.1.7 <3'
+  # brace-expansion@5: GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-rgw5-rvv9-x895, GHSA-mh99-v99m-4gvg, GHSA-3jxr-9vmj-r5cp, GHSA-q2hr-2g5m-vwhr.
+  brace-expansion@5: '>=5.0.12 <6'
+  # minimatch@3: GHSA-7r86-cg39-jmmj, GHSA-23c5-xmqv-rm74, GHSA-3ppc-4f35-3m26.
+  minimatch@3: '>=3.1.4 <4'
+  # minimatch@9: GHSA-7r86-cg39-jmmj, GHSA-23c5-xmqv-rm74, GHSA-3ppc-4f35-3m26.
+  minimatch@9: '>=9.0.7 <10'
+  # minimatch@10: GHSA-7r86-cg39-jmmj, GHSA-23c5-xmqv-rm74, GHSA-3ppc-4f35-3m26.
+  minimatch@10: '>=10.2.3 <11'
+  # postcss@8: GHSA-r28c-9q8g-f849.
+  postcss@8: '>=8.5.18 <9'
+  # js-yaml@4: GHSA-2883-xcg3-v3hh.
+  js-yaml@4: '>=4.3.2 <5'
+  # nanoid@3: GHSA-2v37-7h3g-55p8.
+  nanoid@3: '>=3.3.18 <4'
+  # fast-uri@3: GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g, GHSA-5jgf-p345-68v8, GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf, GHSA-jqff-g426-hqxp.
+  fast-uri@3: '>=3.1.7 <4'
+  # fast-uri@4: GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g, GHSA-5jgf-p345-68v8, GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf, GHSA-jqff-g426-hqxp.
+  fast-uri@4: '>=4.1.4 <5'
+  # smol-toml@1: GHSA-7w5x-hrqm-74c2.
+  smol-toml@1: '>=1.7.1 <2'
+  # svgo@4: GHSA-w27v-7q3p-w38r.
+  svgo@4: '>=4.1.0 <5'
+  # undici@7: GHSA-4cwx-7wf7-3272, GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3.
+  undici@7: '>=7.29.1 <8'
+  # undici@8: GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3, GHSA-vp8m-p9jh-q5pm, GHSA-4cwx-7wf7-3272.
+  undici@8: '>=8.10.2 <9'
+  # --- end harmon-init security floors; repository-local floors go below this line ---
+  # Retain the website's deliberate minimatch/brace-expansion major lift as
+  # a pair: minimatch 3 expects the old brace-expansion export shape.
+  brace-expansion: '>=5.0.12 <6'
   minimatch@<10.2.5: '>=10.2.5 <11'
-  js-yaml@<4.3.2: '>=4.3.2 <5'
-  nanoid@<3.3.18: '>=3.3.18 <4'
-  fast-uri@<3.1.6: '>=3.1.6 <4'
-  smol-toml@<=1.7.0: '>=1.7.1 <2'
-  devalue: '>=5.9.3 <6'
-  http-cache-semantics: '>=4.3.0'
-  source-map-js: '>=1.2.2'
 
 # Local customization (not from the harmon-init template): expose Astro's
 # transitive deps at the root node_modules so direct imports like

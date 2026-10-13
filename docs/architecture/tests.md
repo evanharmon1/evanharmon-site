@@ -28,6 +28,7 @@ tier binds a port**, not what it is named:
 | `task verify` (= check + build + test) | **no** | the agent's definition-of-done gate |
 | `task test:e2e` (Playwright) | **yes** — serves the app | `task ci`, CI `e2e` job |
 | Lighthouse | **yes** — serves + headless Chrome | CI `lighthouse` job only |
+| `task test:render-parity` | no — builds merge-base + HEAD twice, doesn't serve | `task ci`, CI `render-parity` job (builds twice; too slow for `verify`) |
 
 Everything an agent runs on every change is port-free, so N agents in N
 worktrees can run `task verify` concurrently without fighting over a port.
