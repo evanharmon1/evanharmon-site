@@ -32,7 +32,7 @@ repositories and for profiles without a CodeQL workflow.
 | Axis | Catches | Default tool | Where it runs |
 |---|---|---|---|
 | **SAST** — flaws in *your own code* | injection, XSS, SSRF, path traversal, crypto/auth misuse | **CodeQL** for public repos; **Semgrep CE** for free private repos | CodeQL runs automatically in public CI. Private CI uses Semgrep unless paid GitHub Code Security + `FULL_SECURITY_SCAN=true` opts into CodeQL |
-| **SCA** — CVEs in *dependencies* | vulnerable third-party packages | **Dependabot alerts** + **`task security:audit`** (`pnpm audit`) | Dependabot continuous; audit in the CI `security` job + `task security` locally |
+| **SCA** — CVEs in *dependencies* | vulnerable third-party packages | **Dependabot alerts** + **`task security:audit`** (`pnpm audit`) | Dependabot continuous; audit in the CI `security` job + `task security` locally; the security-floor block is template-owned and arrives via `copier update`; each floor uses a `pkg@<major>` key and is bounded below the next major; the block never crosses a major; 0.x floors select only the fixture graph's tested minors and are bounded below the next minor of the moved version; a 0.x minor is moved only where upstream published no in-minor patch and the entry says so; the fixture toolchain builds with those moved versions; other 0.x minor edges are left for consumer audit and a local floor after validation; local floors below the end marker inside `overrides` follow the same shape (quote a scoped package key: `'@scope/pkg@7'`); when a later template version floors a release line you floored locally, delete your local entry; after a template update changes the block, run `pnpm install --no-frozen-lockfile` and commit `pnpm-lock.yaml` (pnpm records the `overrides` in the lockfile, so a frozen install — for example, the CI setup action, `scripts/setup-remote.sh`, `task worktree:new`, or any shell with `CI` set — fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` until the lockfile matches the block); raise a local floor with `task security:audit:fix`, never raw `pnpm audit --fix` (see [Scheduled audit remediation](#scheduled-audit-remediation)); Harmon Init CI audits only the Astro fixture graph against the shipped block, not the rest of a real repository's graph: an advisory in a package the fixture does not use surfaces in the consumer's own `pnpm audit`, so floor it locally with `task security:audit:fix` and report it upstream; an advisory on a release line the block already floors (its `pkg@<major>` or `pkg@0.<minor>` key) is refused there, so raise that one upstream instead |
 | **Secrets** — committed credentials | keys, tokens, certs, `.env` | **gitleaks** (`task security:secrets`) | pre-push git hook + CI `security` job |
 | **IaC** — insecure infrastructure | open security groups, public buckets, … | **checkov** (`task lint:terraform:security`) | CI `lint` job + `task check` locally (Terraform repos) |
 | **Freshness/remediation** — stale or vulnerable dependencies | a widening exposure window | **Renovate** (`minimumReleaseAge: 3 days`, Dependabot-alert remediation enabled) | continuous update and vulnerability-fix PRs |
@@ -141,6 +141,60 @@ support, for one, requires an Enterprise plan with the uv Preview feature
 enabled, so a Python project on the free posture gets far less than the setting
 implies). Establish the real depth for the stack you actually ship, per tool,
 and treat a green run as evidence only for what you confirmed it inspects.
+
+### Scheduled audit remediation
+
+The PR audit reacts to the world changing, not to your diff, so a newly
+published transitive `high` turns `security` red on every open PR at once. The
+remediation is mechanical, and the template does it for you:
+
+- **`task security:audit:fix`** runs `pnpm audit --fix --audit-level=high` only
+  to learn which patched version each advisory needs, restores
+  `pnpm-workspace.yaml` byte-for-byte, and writes its own floor for each
+  one below the template-owned block's end marker: `pkg@<major>: '>=x.y.z
+  <next-major'` (0.x: `pkg@0.m: '>=0.m.p <0.(m+1)'`) with a comment naming the
+  advisories. When pnpm proposes no covering fix on the installed line, a
+  concrete patched version from the advisory on that line supplies the floor
+  instead; the same lockfile re-resolve and re-audit must prove it clears the
+  advisory. When an existing local override for the package has a narrower
+  explicit cap above the new floor (`'>=1.5.0 <1.8.0'`), that cap is kept in
+  place of `<next-major`. It then re-resolves the lockfile without running
+  lifecycle scripts and re-audits; a floor that does not clear its advisory is
+  rolled back. A second run on a remediated tree changes nothing.
+- It **refuses** — exits 3 and writes nothing — when a fix would cross a major
+  (it names the package, both majors, and the direct dependency that pulls the
+  old line in: upgrade that dependency deliberately), when no patched version
+  exists on the installed line (or no covering proposal exists and the advisory
+  gives no concrete patch there; the refusal names the major), when the floor
+  belongs to the template-owned block (raise that upstream in harmon-init
+  instead), or when an existing override for the
+  package stands in the way: one whose cap the script cannot prove (an exact
+  pin, `~`, an x-range, a hyphen range, `^0.x`, a prerelease or build suffix,
+  `||`) or that caps the package at or below the patched version, one placed
+  after the key it would rewrite (pnpm applies the last matching override), or
+  any parent-scoped `parent>pkg` override, whatever its value (pnpm prefers it
+  over the written key in either order, so the floor would not apply: remove
+  it). An exact `pkg@N` (N ≥ 1) or `pkg@0.M` key on another line is exempt by
+  its key alone from every per-entry rule (the unreadable cap, the narrowest
+  cap, the ordering). The refusal names the entry, so you raise or remove it
+  deliberately.
+- **Never run raw `pnpm audit --fix`.** pnpm 11 writes it into
+  `pnpm-workspace.yaml`, but each override is keyed by the advisory's vulnerable
+  range (`pkg@<1.2.3: ^1.2.3`): an **unbounded** selector that spans every
+  earlier major rather than a floor on the major you resolve, and a **forced
+  major** whenever the patch only exists there (`pkg@<=8.5.1: ^9.0.0`). It can
+  also drop comments in the `overrides` map, the template markers included.
+- Keep `pnpm-workspace.yaml` in the template's two-space indentation, with both
+  floor markers indented inside `overrides`: the task edits the file with yq,
+  which writes two-space YAML, and it refuses any write that would change the
+  template-owned block.
+- **`security-audit-fix.yml`** runs `task security:audit` daily; when the pnpm
+  audit in it fails, it runs `task security:audit:fix -- --skip-refused` (apply what is safe,
+  report what is refused) and opens or updates **one** rolling draft PR on
+  `bot/security-audit-fix` listing each advisory, package, floor, and refusal
+  reason. The PR `security` gate is unchanged, so it stays red until that PR (or
+  a deliberate upgrade for a refused fix) merges. See
+  [ci-cd.md](ci-cd.md#workflows) for the trigger and token.
 
 ### Snyk second opinion and scheduling
 
@@ -297,11 +351,94 @@ slugs, replaces that with one dispatch point:
 See [../guides/devcontainers.md](../guides/devcontainers.md) for the
 per-harness mechanics.
 
+## Agent devcontainer: the unattended posture
+
+The **agent** posture (`.devcontainer/agent/`, marker
+`FOREMAN_DEVCONTAINER=agent`) is for an agent that runs where nobody watches —
+a third-party cloud VM, or work on untrusted input. Untrusted input enters it
+as data (issues, diffs, pull request content); the devcontainer definition
+must come from a trusted checkout (the default branch or a reviewed ref),
+because `initializeCommand` runs checkout code on the host for every profile.
+It is **never looser than bot on any axis**; the decision and every "not" are
+in harmon-init's
+[three-posture ADR](https://github.com/evanharmon1/harmon-init/blob/main/docs/decisions/2026-09-29-agent-posture-three-posture-model.md).
+The security contract, by layer:
+
+- **Harness policy — one source.** `.devcontainer/config/agent/` holds the
+  agent Claude managed settings (auto mode, `disableBypassPermissionsMode:
+  "disable"`, `allowManagedPermissionRulesOnly`, an explicit dev-loop allow
+  list that includes `gh pr merge`, deny rules for
+  release/admin/secrets/workflows/force-push (argument patterns, defence in
+  depth; see [the agent posture](https://github.com/evanharmon1/harmon-init/blob/main/docs/architecture/remote-environments.md#the-agent-posture))/pushes to
+  `main`/`op`/`.env*`/the egress-tamper commands, and no `ask` rule) and
+  the agent Codex managed config (`workspace-write`, never
+  `danger-full-access`, approval `never` — its sandbox is the criterion, and
+  it carries no command-level deny list).
+  Neither the bot nor the agent posture carries a merge guard: in either
+  profile, a PAT with `pull_requests: write` can merge any approved PR whose
+  required checks are green. The "Protect Main" ruleset — code-owner
+  approval plus the required status checks — is the only boundary on what
+  reaches `main`.
+  In the agent devcontainer, `.devcontainer/agent/agent-autonomy.sh apply`
+  installs both at create and refuses every other harness, and `verify`
+  re-checks at every start. The remote bootstrap runs both with
+  `--platform-vm`, which installs and verifies the two files but refuses no
+  harness — a recorded delivery gap on platform VMs; see
+  [How each platform receives the agent posture](https://github.com/evanharmon1/harmon-init/blob/main/docs/architecture/remote-environments.md#how-each-platform-receives-the-agent-posture).
+  `scripts/test-agent-profile.sh` (in `task verify`) fails on a second copy,
+  on an agent allow rule bot does not grant or bot denies, on an `ask` rule,
+  and on Codex `danger-full-access`.
+- **Credentials — fail closed.** `init-env.sh --profile agent` admits only
+  `AGENT_GH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, and the disclosed opt-in
+  provider keys, and stops the build on anything else. The container blanks
+  `GH_TOKEN` and its aliases so the stored agent login is the only GitHub
+  credential. No 1Password, no Tailscale, never `ANTHROPIC_API_KEY`.
+- **Network — default-deny egress.** `egress-allowlist.sh` installs the filter
+  before anything else at create and at every start, and fails the container
+  if it cannot. Every such failure leaves the OUTPUT and FORWARD policies
+  DROP — a failed iptables install, a refused list at snapshot or apply, a
+  failed rule or verify, a missing snapshot — except when iptables itself
+  could not be installed: nothing can set DROP then, and the step says so
+  (`CRITICAL`). A container whose create or start failed must not be used.
+  Post-create snapshots the applier and both lists into a
+  root-owned directory, and every start applies that snapshot, never the
+  writable checkout. A `0.0.0.0` entry or a CIDR wider than `/16` fails
+  closed, whether it is a list line or a range fetched through
+  `@github-meta`. Refused destinations are recorded
+  (`egress-allowlist.sh blocked`) for the lane report.
+- **Docker — none by default.** Never the host socket; Docker-in-Docker only
+  through the documented per-repo opt-in (`HARMON_AGENT_DOCKER=dind`), which
+  the same egress filter still covers.
+- **Residuals — where the boundaries are.** Command-level denies are a
+  best-effort first layer for a cooperating harness (Claude Code's rules;
+  Codex has none): they are not transitive through repository code —
+  Taskfile targets and git hooks, which the agent runs through `task` and
+  commits — and pattern matching can miss flag spellings such as bundled
+  short flags. Argument-pattern denies are defence in depth. In the agent
+  posture, REST reads use `/usr/local/bin/gh-api-read`, which pins the system
+  PATH and GET method; raw `gh api` is denied. The boundary for **GitHub
+  writes** is the bot's collaborator grants, the agent PAT's scopes (no
+  administration, secrets, or workflow) and the branch rulesets (no direct or force push to `main`;
+  a merge to `main` needs code-owner approval and green required checks). The
+  rulesets do not stop the PAT from merging: once a human has approved and
+  the checks pass, its `pull_requests: write` can perform that merge. Its
+  `contents: write` lets it create releases and push non-protected branches
+  — a fine-grained PAT cannot separate releases from contents. The boundary
+  for the **network** is the egress filter; it lives inside the container
+  and needs `NET_ADMIN`, and the container user keeps passwordless `sudo`,
+  so repository code run with root can lift it. Narrowing `sudo` is tracked
+  in [harmon-init#1432](https://github.com/evanharmon1/harmon-init/issues/1432). DNS to
+  the configured resolvers stays open. See the ADR's Consequences for the
+  full list.
+
 ## Two identities: the bot vs the operator
 
 - **AI bot** (`evanharmon1-bot`) — runs in the primary
   devcontainer with a scoped fine-grained PAT (Write, no admin) for its in-container
-  git pushes. Cannot push to or merge `main`. (CI **workflows** authenticate
+  git pushes. Cannot push to `main`; the rulesets require code-owner approval
+  and green checks for a merge into it, which its `pull_requests: write` can
+  then perform once a human has approved — merging stays the maintainer's
+  decision. (CI **workflows** authenticate
   separately as the `evanharmon1-ci` GitHub App — see below.)
 - **Operator** (you) — full access from the human `dev/` devcontainer or host.
 
@@ -371,7 +508,10 @@ Write it down rather than re-derive it under pressure:
 
 - **The selected repos** — at the level each collaborator grant allows, capped by
   the permission table. It can push branches, open PRs, and comment. It **cannot**
-  merge `main` (ruleset + CODEOWNERS), edit workflows, or change settings.
+  merge `main` unapproved: the ruleset and CODEOWNERS require code-owner
+  approval and green checks, though its `pull_requests: write` can perform a
+  merge a human has approved — merging stays the maintainer's decision. Nor
+  can it edit workflows or change settings.
 
 **Read is cheap; write is the line.** Variables are read-only deliberately:
 write could opt a private repository into paid CodeQL or mutate other
@@ -384,7 +524,7 @@ variable, not forever.
 ## CI automation identity (GitHub App)
 
 CI workflows that act on the repo as a bot — release-please, the
-`claude-*` workflows — authenticate as a
+`claude-*` workflows, `security-audit-fix.yml` — authenticate as a
 **GitHub App dedicated to this owner**, not a personal access token. **Each
 GitHub org (and personal account) gets its own App**, named **`<owner>-ci`** —
 for this repo, **`evanharmon1-ci`**. One App per org keeps a leaked key
@@ -508,6 +648,13 @@ even the in-org radius small:
   it from workflows that untrusted code can influence (fork `pull_request`,
   `pull_request_target`, `workflow_run`) — the provided workflows gate on
   sender / same-repo checks.
+- **Never put `workflow_dispatch` on a workflow that mints an App token.** For
+  that trigger GitHub runs the workflow definition from whichever ref the
+  operator selects, so any branch — reviewed or not — could rewrite the
+  token-minting step and use the credential. Pinning the *checkout* to `main`
+  does not help: the token already exists. Use `repository_dispatch` when a
+  manual trigger is needed; it takes the same repository write access and
+  always runs the default branch's definition.
 - **Rotate the key** periodically; GitHub Apps allow multiple keys for
   zero-downtime rotation.
 
@@ -515,11 +662,15 @@ even the in-org radius small:
 
 | Secret / variable | Used by | Stored in | Rotation |
 |---|---|---|---|
-| `CI_APP_CLIENT_ID` (var) + `CI_APP_PRIVATE_KEY` (secret) | release-please, claude-* | repo or org Actions variable + secret | rotate App key per policy |
+| `CI_APP_CLIENT_ID` (var) + `CI_APP_PRIVATE_KEY` (secret) | release-please, claude-*, security-audit-fix | repo or org Actions variable + secret | rotate App key per policy |
 | `CLAUDE_CODE_OAUTH_TOKEN` | claude-* workflows | repo Actions secret | re-run `claude setup-token` |
-| `GH_TOKEN` (the bot's PAT) | the devcontainer agent's `gh`/git operations | 1Password Environment → devcontainer `--env-file` | manual; re-issue before expiry ([guides/bot-account.md](../guides/bot-account.md)) |
-| `SNYK_TOKEN` | optional Snyk CLI scans | local env / 1Password by default | manual |
+| `GH_TOKEN` (the bot's PAT) | the **bot** devcontainer's `gh`/git operations — never the `dev/` profile | 1Password Environment → devcontainer `--env-file` | manual; re-issue before expiry ([guides/bot-account.md](../guides/bot-account.md)) |
+| `FOREMAN_AGENT_GH_TOKEN` (read-only PAT) | handed by foreman to dispatched agents as their `GH_TOKEN`; bot profile only, required before any dispatch | 1Password Environment → devcontainer `--env-file` | manual; rotate with the bot PAT |
+| `AGENT_GH_TOKEN` (the agent PAT) | the **agent** devcontainer's `gh`/git operations (stored as gh's login at create); never the bot or dev profile | host environment → `init-env.sh --profile agent` → `.devcontainer/agent/devcontainer.env` | manual; ≤180-day expiry, one per resource owner ([guides/bot-account.md](../guides/bot-account.md)) |
+| `SNYK_TOKEN` | optional Snyk CLI scans + `snyk-scheduled.yml` | local env / 1Password by default; Actions secret for the generated schedule | manual |
 | TODO | TODO | TODO | TODO |
+
+The optional `CLAUDE_CODE_OAUTH_TOKEN_2` enables one zero-usage failure fallback in Claude workflows; the fallback is skipped when absent.
 
 > **`CLAUDE_CODE_OAUTH_TOKEN` must be an OAuth token, not an API key.** Generate
 > it with `claude setup-token`; the value starts **`sk-ant-oat01-`** and bills the

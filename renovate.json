@@ -2,7 +2,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "timezone": "America/Chicago",
-  "schedule": ["before 9am on Monday"],
+  "schedule": ["* * * * 6", "* 0-4 * * 0"],
+  "updateNotScheduled": false,
   "prConcurrentLimit": 10,
   "automerge": false,
   "dependencyDashboard": true,
@@ -108,6 +109,12 @@
       "groupName": "Docker images"
     },
     {
+      "description": "Keep Ubuntu pinned to 24.04 LTS for remote-bootstrap environment parity; digest updates only",
+      "matchPackageNames": ["ubuntu"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Surface harmon-devkit releases for deliberate pin-and-sync updates",
       "matchManagers": ["custom.regex"],
       "matchPackageNames": ["evanharmon1/harmon-devkit"],
@@ -164,10 +171,19 @@
       "groupName": "Astro"
     },
     {
-      "description": "Disable auto-update for npm overrides used as security pins — Renovate runs npm install <pkg>@<version> to update overrides, which causes EOVERRIDE when the package also appears as a transitive dep",
+      "description": "Disable auto-update for npm overrides used as security pins — Renovate runs npm install <pkg>@<version> to update overrides, which causes EOVERRIDE when the package also appears as a transitive dep. The template-owned security floors in pnpm-workspace.yaml are major-bounded on purpose, and Renovate reads that file under its own depType (pnpm-workspace.overrides), so without this rule it proposes widening a floor across the major the block forbids",
       "matchManagers": ["npm"],
-      "matchDepTypes": ["overrides"],
+      "matchDepTypes": ["overrides", "pnpm.overrides", "pnpm-workspace.overrides"],
       "enabled": false
+    },
+    {
+      "description": "Batch prettier (with its plugins and shared config), markdownlint-cli2, and Black together as \"Formatters\": a formatter bump can reformat every file it touches with no code change behind it, so it gets its own PR and its own reminders rather than riding the generic npm/majors batches. Always present — markdownlint-cli2 is not gated by use_node — but must come after the npm major/non-major split above so a prettier major still lands here instead of getting its own solo PR (no other rule here matches these names, so ordering against ESLint/Astro/CI lint tools/Devcontainer is otherwise moot). shfmt is already isolated in the 'CI lint tools' group (#1352) and is deliberately not duplicated here.",
+      "matchPackageNames": ["markdownlint-cli2", "prettier", "prettier-plugin-*", "prettier-config-*"],
+      "groupName": "Formatters",
+      "prBodyNotes": [
+        "Run `task fix` and commit the reformat as a separate commit from this dependency bump; do not amend Renovate's commit.",
+        "web-astro only: before merging, run `task test:render-parity` — a prettier-plugin-astro bump can silently reflow whitespace-sensitive inline markup when this repo's `astroCompressHTML` setting (prettier.config.cjs) disagrees with `astro.config`'s `compressHTML` (see docs/CHECKLIST.md and scripts/test-astro-compress-parity.sh)."
+      ]
     }
   ]
 }
