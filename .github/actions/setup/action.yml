@@ -31,7 +31,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
     # PNPM_CONFIG_STORE_DIR is pnpm's environment-variable form of
     # `--store-dir`, verified empirically with pnpm 11 and 12 via
     # `pnpm config get store-dir`. $RUNNER_TEMP is emptied for every job;
@@ -43,7 +43,7 @@ runs:
         : "${RUNNER_TEMP:?RUNNER_TEMP is required to isolate the pnpm store}"
         store_dir="${RUNNER_TEMP}/.pnpm-store"
         echo "PNPM_CONFIG_STORE_DIR=${store_dir}" >> "$GITHUB_ENV"
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
       with:
         # renovate: datasource=node-version
         node-version: "24"
@@ -69,10 +69,10 @@ runs:
         esac
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
       with:
-        python-version: "3.13"
+        python-version: "3.15"
     # uv provides uvx for pinned Semgrep CE and the pinned
     # foreman CLI (see taskfiles/foreman.yml).
-    - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+    - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
     - uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
       with:
         # renovate: datasource=github-releases depName=go-task/task extractVersion=^v(?<version>.+)$
