@@ -78,7 +78,7 @@ const Swatches = (rows: Swatch[]) => rows;
           <p class="lead">
             The brand &amp; design system for <strong>evanharmon.com</strong> — an aged-paper, woodcut-engraving
             almanac: antique serif typography, gilt ornaments, a tactile printed grain, and bold colour-block sections,
-            in a light <em>Parchment</em> theme and a dark <em>Midnight</em> theme.
+            in a {'light'}<em>Parchment</em> theme and a dark <em>Midnight</em> theme.
           </p>
           <p class="note">
             Toggle the theme top-right. This page is the at-a-glance reference; the exhaustive spec lives in
@@ -94,8 +94,8 @@ const Swatches = (rows: Swatch[]) => rows;
             </div>
           </div>
           <p class="note">
-            The card follows the theme — <strong>Midnight</strong> shows the dark default; <strong>Parchment</strong>
-            shows the green colour-block card. Serve the dark one from the site root for the live
+            The card follows the theme — <strong>Midnight</strong> shows the dark default; <strong>Parchment</strong
+            >{' '} shows the green colour-block card. Serve the dark one from the site root for the live{' '}
             <span class="mono">og:image</span> tags (dark cards read best in feeds).
           </p>
         </div>
@@ -202,7 +202,7 @@ const Swatches = (rows: Swatch[]) => rows;
         </div>
         <div class="block-body">
           <p class="lead">
-            Dual-theme &amp; token-driven: semantic variables (<span class="mono">paper</span>,
+            Dual-theme &amp; token-driven: semantic variables (<span class="mono">paper</span>,{' '}
             <span class="mono">ink</span>, <span class="mono">accent</span> …) swap per theme, so one set of utilities
             is theme-aware. Every swatch lists its <strong>hex</strong> and <strong>OKLCH</strong>.
           </p>
@@ -521,8 +521,8 @@ const Swatches = (rows: Swatch[]) => rows;
         <div class="block-body">
           <p class="lead">
             Engraved fields with small-caps labels; focus turns the keyline accent, and the invalid state turns it
-            madder/oxblood (the <span class="mono">--c-error</span> token). Buttons share one
-            <span class="mono">.btn</span> family; tags are the quiet small-caps metadata mark.
+            madder/oxblood (the <span class="mono">--c-error</span> token). Buttons share one{' '}
+            <span class="mono">.btn</span>{'family'}; tags are the quiet small-caps metadata mark.
           </p>
 
           <div class="grid2" style="margin-top: 1.4rem">
