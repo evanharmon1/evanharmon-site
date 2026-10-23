@@ -46,19 +46,9 @@ const Tag = href && !disabled ? 'a' : 'button';
   aria-disabled={disabled ? 'true' : undefined}
   {...rest}
 >
-  {
-    leadGlyph && (
-      <span class="gl" aria-hidden="true">
-        {leadGlyph}
-      </span>
-    )
-  }
+  {leadGlyph && <span class="gl" aria-hidden="true">
+    {leadGlyph}
+  </span>}
   <slot />
-  {
-    arrow && (
-      <span class="gl" aria-hidden="true">
-        →
-      </span>
-    )
-  }
+  {arrow && <span class="gl" aria-hidden="true">{'→'}</span>}
 </Tag>

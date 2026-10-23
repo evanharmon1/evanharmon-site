@@ -31,16 +31,17 @@ const ways = [
     <div class="wrap">
       <PageHeading title="Contact" sub="Open correspondence" center />
       <div class="ways">
-        {
-          ways.map((w) => (
-            <a class="way" href={w.href} target={w.href.startsWith('http') ? '_blank' : undefined} rel="noopener">
-              <h3 class="display">{w.title}</h3>
-              <div class="detail">{w.detail}</div>
-              <p>{w.note}</p>
-              {w.href.startsWith('http') && <ExternalSeal />}
-            </a>
-          ))
-        }
+        {ways.map((w) => <a
+          class="way"
+          href={w.href}
+          target={w.href.startsWith('http') ? '_blank' : undefined}
+          rel="noopener"
+        >
+          <h3 class="display">{w.title}</h3>
+          <div class="detail">{w.detail}</div>
+          <p>{w.note}</p>
+          {w.href.startsWith('http') && <ExternalSeal />}
+        </a>)}
       </div>
     </div>
   </main>

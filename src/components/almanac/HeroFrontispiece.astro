@@ -39,7 +39,7 @@ const {
       <div class="cover-inlay">
         <div class="corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div class="sun-wrap">
-          <div class="sun" style="--sun-size:104px" aria-hidden="true">
+          <div class="sun" style="--sun-size: 104px" aria-hidden="true">
             <div class="rays"></div>
             <div class="rays2"></div>
             <div class="face"></div>
@@ -54,20 +54,12 @@ const {
         <div class="hero-div"><Divider /></div>
         <p class="tagline">{tagline}</p>
         <div class="hero-cta">
-          {
-            primary && (
-              <Button href={primary.href} variant="solid" arrow={false} glyph={primary.glyph}>
-                {primary.label}
-              </Button>
-            )
-          }
-          {
-            secondary && (
-              <Button href={secondary.href} arrow={false}>
-                {secondary.label}
-              </Button>
-            )
-          }
+          {primary && <Button href={primary.href} variant="solid" arrow={false} glyph={primary.glyph}>
+            {primary.label}
+          </Button>}
+          {secondary && <Button href={secondary.href} arrow={false}>
+            {secondary.label}
+          </Button>}
         </div>
       </div>
     </div>
