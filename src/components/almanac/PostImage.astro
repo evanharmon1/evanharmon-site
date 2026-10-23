@@ -18,10 +18,8 @@ const { src, alt = '', class: cls, widths, sizes, width, loading = 'lazy' } = As
 const localImg = getLocalImage(src);
 ---
 
-{
-  localImg ? (
-    <Image src={localImg} alt={alt} class={cls} widths={widths} sizes={sizes} width={width} loading={loading} />
-  ) : isRemoteImage(src) ? (
-    <img src={src} alt={alt} class={cls} loading={loading} decoding="async" />
-  ) : null
-}
+{localImg ? (
+  <Image src={localImg} alt={alt} class={cls} widths={widths} sizes={sizes} width={width} loading={loading} />
+) : isRemoteImage(src) ? (
+  <img src={src} alt={alt} class={cls} loading={loading} decoding="async" />
+) : null}

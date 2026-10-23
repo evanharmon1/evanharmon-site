@@ -43,31 +43,21 @@ const lines = name.split('\n');
     <div class="hero-copy">
       <div class="kicker"><span class="eyebrow">{eyebrow}</span></div>
       <h1 class="display">
-        {
-          lines.map((l, i) => (
-            <>
-              {l}
-              {i < lines.length - 1 && <br />}
-            </>
-          ))
-        }
+        {lines.map((l, i) => (
+          <>
+            {l}
+            {i < lines.length - 1 && <br />}
+          </>
+        ))}
       </h1>
       <p class="tagline">{tagline}</p>
       <div class="hero-cta">
-        {
-          primary && (
-            <Button href={primary.href} variant="solid" arrow={false} glyph={primary.glyph}>
-              {primary.label}
-            </Button>
-          )
-        }
-        {
-          secondary && (
-            <Button href={secondary.href} arrow={false}>
-              {secondary.label}
-            </Button>
-          )
-        }
+        {primary && <Button href={primary.href} variant="solid" arrow={false} glyph={primary.glyph}>
+          {primary.label}
+        </Button>}
+        {secondary && <Button href={secondary.href} arrow={false}>
+          {secondary.label}
+        </Button>}
       </div>
     </div>
     <figure class="plate">
