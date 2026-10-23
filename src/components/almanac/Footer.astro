@@ -8,13 +8,15 @@ import { SITE, SOCIALS } from '~/data/site';
 <footer class="site-foot">
   <div class="wrap">
     <div class="foot-grid">
-      <div style="max-width:22rem">
+      <div style="max-width: 22rem">
         <div class="brand-word">Evan Harmon</div>
       </div>
       <div>
         <div class="label">Elsewhere on the machines</div>
         <div class="socials">
-          {SOCIALS.map((s) => <SocialIcon name={s.name} href={s.href} />)}
+          {SOCIALS.map((s) => (
+            <SocialIcon name={s.name} href={s.href} />
+          ))}
         </div>
       </div>
     </div>

@@ -76,9 +76,9 @@ const Swatches = (rows: Swatch[]) => rows;
             <b class="leaf l">❧</b><i class="ln"></i><b class="mid">❖</b><i class="ln"></i><b class="leaf">❧</b>
           </div>
           <p class="lead">
-            The brand &amp; design system for <strong>evanharmon.com</strong> — an aged-paper, woodcut-engraving almanac:
-            antique serif typography, gilt ornaments, a tactile printed grain, and bold colour-block sections, in a light
-            <em>Parchment</em> theme and a dark <em>Midnight</em> theme.
+            The brand &amp; design system for <strong>evanharmon.com</strong> — an aged-paper, woodcut-engraving
+            almanac: antique serif typography, gilt ornaments, a tactile printed grain, and bold colour-block sections,
+            in a {'light'}<em>Parchment</em> theme and a dark <em>Midnight</em> theme.
           </p>
           <p class="note">
             Toggle the theme top-right. This page is the at-a-glance reference; the exhaustive spec lives in
@@ -86,7 +86,7 @@ const Swatches = (rows: Swatch[]) => rows;
           </p>
 
           <h3 class="sub-title">Open Graph · share card</h3>
-          <div class="asset" style="max-width:660px">
+          <div class="asset" style="max-width: 660px">
             <img id="ogImg" src="/images/og-image.png" alt="Evan Harmon Open Graph share card" />
             <div class="cap">
               <span class="t" id="ogTitle">Midnight · default</span>
@@ -94,10 +94,9 @@ const Swatches = (rows: Swatch[]) => rows;
             </div>
           </div>
           <p class="note">
-            The card follows the theme — <strong>Midnight</strong> shows the dark default; <strong>Parchment</strong> shows
-            the green colour-block card. Serve the dark one from the site root for the live <span class="mono"
-              >og:image</span
-            > tags (dark cards read best in feeds).
+            The card follows the theme — <strong>Midnight</strong> shows the dark default; <strong>Parchment</strong
+            >{' '} shows the green colour-block card. Serve the dark one from the site root for the live{' '}
+            <span class="mono">og:image</span> tags (dark cards read best in feeds).
           </p>
         </div>
       </section>
@@ -114,12 +113,12 @@ const Swatches = (rows: Swatch[]) => rows;
             literate, with dry wit; it treats a personal site like a finely-printed object.
           </p>
           <p class="bquote">“Cantankerous contraptions &amp; philosophical piffle.”</p>
-          <p class="eyebrow" style="margin-top:1.6rem">Tone</p>
+          <p class="eyebrow" style="margin-top: 1.6rem">Tone</p>
           <div class="tone-row">
             <span class="tone">Crafted</span><span class="tone">Antiquarian</span><span class="tone">Tactile</span>
             <span class="tone">Confident</span><span class="tone">Quiet</span>
           </div>
-          <div class="voice" style="margin-top:1.8rem">
+          <div class="voice" style="margin-top: 1.8rem">
             <div class="do">
               <h4>Do</h4>
               <ul>
@@ -171,9 +170,9 @@ const Swatches = (rows: Swatch[]) => rows;
             </div>
           </div>
           <p class="note">
-            Wordmark “Evan Harmon” in the display serif. The <span class="mono gold">EH</span> monogram in the cover serif
-            (Old Standard TT) inside a gilt circle with a double inset keyline — the brand-mark; 32 px in the header, also
-            the favicon.
+            Wordmark “Evan Harmon” in the display serif. The <span class="mono gold">EH</span> monogram in the cover
+            serif (Old Standard TT) inside a gilt circle with a double inset keyline — the brand-mark; 32 px in the
+            header, also the favicon.
           </p>
 
           <h3 class="sub-title">Ceremonial marks</h3>
@@ -188,9 +187,9 @@ const Swatches = (rows: Swatch[]) => rows;
             </div>
           </div>
           <p class="note">
-            The <strong>Crest</strong> is the cover / frontispiece seal; the <strong>Bookplate</strong> is the ownership mark
-            for covers, about pages and printed matter. Both are token-driven — gilt follows the theme (gold on Midnight,
-            antique gold on Parchment).
+            The <strong>Crest</strong> is the cover / frontispiece seal; the <strong>Bookplate</strong> is the ownership
+            mark for covers, about pages and printed matter. Both are token-driven — gilt follows the theme (gold on
+            Midnight, antique gold on Parchment).
           </p>
         </div>
       </section>
@@ -203,72 +202,59 @@ const Swatches = (rows: Swatch[]) => rows;
         </div>
         <div class="block-body">
           <p class="lead">
-            Dual-theme &amp; token-driven: semantic variables (<span class="mono">paper</span>, <span class="mono"
-              >ink</span
-            >, <span class="mono">accent</span> …) swap per theme, so one set of utilities is theme-aware. Every swatch lists
-            its <strong>hex</strong> and <strong>OKLCH</strong>.
+            Dual-theme &amp; token-driven: semantic variables (<span class="mono">paper</span>,{' '}
+            <span class="mono">ink</span>, <span class="mono">accent</span> …) swap per theme, so one set of utilities
+            is theme-aware. Every swatch lists its <strong>hex</strong> and <strong>OKLCH</strong>.
           </p>
 
           <div class="pal-head first">
             <span class="nm">Parchment</span><span class="tag">light theme · brand primary · accent carries green</span>
           </div>
           <div class="swatches">
-            {
-              Swatches(PARCHMENT).map(([nm, hex, ok, role]) => (
-                <div class="sw">
-                  <div class="chip" style={`background:${hex}`} />
-                  <div class="meta">
-                    <div class="nm">{nm}</div>
-                    <div class="hex">{hex.toUpperCase()}</div>
-                    <div class="ok">{ok}</div>
-                    <div class="role">{role}</div>
-                  </div>
-                </div>
-              ))
-            }
+            {Swatches(PARCHMENT).map(([nm, hex, ok, role]) => <div class="sw">
+              <div class="chip" style={`background:${hex}`} />
+              <div class="meta">
+                <div class="nm">{nm}</div>
+                <div class="hex">{hex.toUpperCase()}</div>
+                <div class="ok">{ok}</div>
+                <div class="role">{role}</div>
+              </div>
+            </div>)}
           </div>
 
           <div class="pal-head">
             <span class="nm">Midnight</span><span class="tag">dark theme · accent carries gold</span>
           </div>
           <div class="swatches">
-            {
-              Swatches(MIDNIGHT).map(([nm, hex, ok, role]) => (
-                <div class="sw">
-                  <div class="chip" style={`background:${hex}`} />
-                  <div class="meta">
-                    <div class="nm">{nm}</div>
-                    <div class="hex">{hex.toUpperCase()}</div>
-                    <div class="ok">{ok}</div>
-                    <div class="role">{role}</div>
-                  </div>
-                </div>
-              ))
-            }
+            {Swatches(MIDNIGHT).map(([nm, hex, ok, role]) => <div class="sw">
+              <div class="chip" style={`background:${hex}`} />
+              <div class="meta">
+                <div class="nm">{nm}</div>
+                <div class="hex">{hex.toUpperCase()}</div>
+                <div class="ok">{ok}</div>
+                <div class="role">{role}</div>
+              </div>
+            </div>)}
           </div>
 
           <div class="pal-head">
             <span class="nm">Foil &amp; fixed</span><span class="tag">do not swap by theme</span>
           </div>
           <div class="swatches">
-            {
-              Swatches(FIXED).map(([nm, hex, ok, role]) => (
-                <div class="sw">
-                  <div class="chip" style={`background:${hex}`} />
-                  <div class="meta">
-                    <div class="nm">{nm}</div>
-                    <div class="hex">{hex.toUpperCase()}</div>
-                    <div class="ok">{ok}</div>
-                    <div class="role">{role}</div>
-                  </div>
-                </div>
-              ))
-            }
+            {Swatches(FIXED).map(([nm, hex, ok, role]) => <div class="sw">
+              <div class="chip" style={`background:${hex}`} />
+              <div class="meta">
+                <div class="nm">{nm}</div>
+                <div class="hex">{hex.toUpperCase()}</div>
+                <div class="ok">{ok}</div>
+                <div class="role">{role}</div>
+              </div>
+            </div>)}
           </div>
 
           <p class="note">
-            <strong>One accent per theme.</strong> Green carries Parchment, gold carries Midnight. The accent is for eyebrows,
-            numerals, links, hovers &amp; ornaments only — body text stays <span class="mono">ink</span> /
+            <strong>One accent per theme.</strong> Green carries Parchment, gold carries Midnight. The accent is for
+            eyebrows, numerals, links, hovers &amp; ornaments only — body text stays <span class="mono">ink</span> /
             <span class="mono">ink-soft</span>. Colour-blocks (hero &amp; contact) are the only filled surfaces.
           </p>
         </div>
@@ -287,7 +273,7 @@ const Swatches = (rows: Swatch[]) => rows;
 
           <div class="fontgrid">
             <div class="fontcard">
-              <div class="glyphs display" style="font-weight:600">Aa Gg</div>
+              <div class="glyphs display" style="font-weight: 600">Aa Gg</div>
               <div class="fname">Cormorant Garamond <span class="frole">· Display</span></div>
               <div class="fmeta">
                 <b>Weight 600.</b> Headings, hero, the wordmark.
@@ -295,26 +281,28 @@ const Swatches = (rows: Swatch[]) => rows;
               </div>
             </div>
             <div class="fontcard">
-              <div class="glyphs" style="font-family:var(--font-body)">Aa Gg</div>
+              <div class="glyphs" style="font-family: var(--font-body)">Aa Gg</div>
               <div class="fname">EB Garamond <span class="frole">· Body &amp; labels</span></div>
               <div class="fmeta">
                 <b>400 / 500 / 600 + italic.</b> Paragraphs, UI text, and — in
-                <span style="font-variant:small-caps;letter-spacing:.1em">small-caps</span> — eyebrows, nav, tags &amp; dates.
+                <span style="font-variant: small-caps; letter-spacing: 0.1em">small-caps</span> — eyebrows, nav, tags
+                &amp; dates.
               </div>
             </div>
             <div class="fontcard">
-              <div class="glyphs" style="font-family:var(--font-cover);font-weight:700">EH</div>
+              <div class="glyphs" style="font-family: var(--font-cover); font-weight: 700">EH</div>
               <div class="fname">Old Standard TT <span class="frole">· Cover / monogram</span></div>
               <div class="fmeta">
-                <b>400 / 700.</b> The <span class="mono gold">EH</span> brand-mark &amp; crest only. The most antiquarian
-                face — reserve it.
+                <b>400 / 700.</b> The <span class="mono gold">EH</span> brand-mark &amp; crest only. The most
+                antiquarian face — reserve it.
               </div>
             </div>
             <div class="fontcard">
-              <div class="glyphs num" style="font-size:3.2rem">No. 1</div>
+              <div class="glyphs num" style="font-size: 3.2rem">No. 1</div>
               <div class="fname">Playfair Display <span class="frole">· Numerals</span></div>
               <div class="fmeta">
-                <b>Italic.</b> Always italic, always in the accent — section “No.” &amp; catalog numbers. Never for body.
+                <b>Italic.</b> Always italic, always in the accent — section “No.” &amp; catalog numbers. Never for
+                body.
               </div>
             </div>
           </div>
@@ -322,24 +310,20 @@ const Swatches = (rows: Swatch[]) => rows;
           <h3 class="sub-title">Specimens</h3>
           <div class="specimen">
             <div class="row">
-              <span class="label">Hero · Cormorant 600</span><span
-                class="display"
-                style="font-size:clamp(2.6rem,7vw,4.6rem)">Evan&nbsp;Harmon</span
-              >
+              <span class="label">Hero · Cormorant 600</span
+              ><span class="display" style="font-size: clamp(2.6rem, 7vw, 4.6rem)">Evan&nbsp;Harmon</span>
             </div>
             <div class="row">
-              <span class="label">Section · Cormorant 600</span><span
-                class="display"
-                style="font-size:clamp(1.8rem,4vw,2.8rem)">Work &amp; Endeavours</span
-              >
+              <span class="label">Section · Cormorant 600</span
+              ><span class="display" style="font-size: clamp(1.8rem, 4vw, 2.8rem)">Work &amp; Endeavours</span>
             </div>
             <div class="row">
-              <span class="label">Numerals · Playfair italic</span><span class="num" style="font-size:2.4rem"
-                >No. 1&nbsp;&nbsp;2&nbsp;&nbsp;3&nbsp;&nbsp;4</span
-              >
+              <span class="label">Numerals · Playfair italic</span
+              ><span class="num" style="font-size: 2.4rem">No. 1&nbsp;&nbsp;2&nbsp;&nbsp;3&nbsp;&nbsp;4</span>
             </div>
             <div class="row">
-              <span class="label">Body · EB Garamond</span><span style="max-width:52ch"
+              <span class="label">Body · EB Garamond</span
+              ><span style="max-width: 52ch"
                 >I'm a technologist and software engineer with experience in DevOps, web development, AI, cloud
                 engineering, and project management — building and growing things in the open.</span
               >
@@ -348,46 +332,61 @@ const Swatches = (rows: Swatch[]) => rows;
               <span class="label">Eyebrow · small-caps</span><span class="eyebrow">Correspondence · No. IV</span>
             </div>
             <div class="row">
-              <span class="label">Label / meta</span><span class="label"
-                >Template · CI/CD&nbsp;&nbsp;·&nbsp;&nbsp;Dec 2025</span
-              >
+              <span class="label">Label / meta</span
+              ><span class="label">Template · CI/CD&nbsp;&nbsp;·&nbsp;&nbsp;Dec 2025</span>
             </div>
           </div>
 
           <h3 class="sub-title">Type scale</h3>
           <table class="tbl">
-            <thead><tr><th>Token</th><th>Size</th><th>Use</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Size</th>
+                <th>Use</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr
-                ><td class="k">hero</td><td><span class="px">clamp(2.8rem, 9.5vw, 7rem)</span></td><td>Hero wordmark</td
-                ></tr
-              >
-              <tr
-                ><td class="k">cta</td><td><span class="px">clamp(2.6rem, 7vw, 5rem)</span></td><td
-                  >“Let's Talk” heading</td
-                ></tr
-              >
-              <tr
-                ><td class="k">section</td><td><span class="px">clamp(2rem, 4.4vw, 3.1rem)</span></td><td
-                  >Section titles</td
-                ></tr
-              >
-              <tr><td class="k">h3</td><td><span class="px">1.55rem</span></td><td>Catalog entry titles</td></tr>
-              <tr><td class="k">body</td><td><span class="px">1.16rem</span> · lh 1.62</td><td>Default body</td></tr>
-              <tr
-                ><td class="k">numeral</td><td><span class="px">2.1rem</span> / <span class="px">1.5rem</span></td><td
-                  >Catalog / section “No.”</td
-                ></tr
-              >
-              <tr
-                ><td class="k">eyebrow</td><td><span class="px">0.72rem</span> · tracking 0.28em</td><td
-                  >Eyebrows (small-caps)</td
-                ></tr
-              >
-              <tr
-                ><td class="k">label / nav</td><td><span class="px">0.74rem</span> / <span class="px">0.76rem</span></td
-                ><td>Tags, dates, nav</td></tr
-              >
+              <tr>
+                <td class="k">hero</td>
+                <td><span class="px">clamp(2.8rem, 9.5vw, 7rem)</span></td>
+                <td>Hero wordmark</td>
+              </tr>
+              <tr>
+                <td class="k">cta</td>
+                <td><span class="px">clamp(2.6rem, 7vw, 5rem)</span></td>
+                <td>“Let's Talk” heading</td>
+              </tr>
+              <tr>
+                <td class="k">section</td>
+                <td><span class="px">clamp(2rem, 4.4vw, 3.1rem)</span></td>
+                <td>Section titles</td>
+              </tr>
+              <tr>
+                <td class="k">h3</td>
+                <td><span class="px">1.55rem</span></td>
+                <td>Catalog entry titles</td>
+              </tr>
+              <tr>
+                <td class="k">body</td>
+                <td><span class="px">1.16rem</span> · lh 1.62</td>
+                <td>Default body</td>
+              </tr>
+              <tr>
+                <td class="k">numeral</td>
+                <td><span class="px">2.1rem</span> / <span class="px">1.5rem</span></td>
+                <td>Catalog / section “No.”</td>
+              </tr>
+              <tr>
+                <td class="k">eyebrow</td>
+                <td><span class="px">0.72rem</span> · tracking 0.28em</td>
+                <td>Eyebrows (small-caps)</td>
+              </tr>
+              <tr>
+                <td class="k">label / nav</td>
+                <td><span class="px">0.74rem</span> / <span class="px">0.76rem</span></td>
+                <td>Tags, dates, nav</td>
+              </tr>
             </tbody>
           </table>
           <p class="note">
@@ -407,19 +406,19 @@ const Swatches = (rows: Swatch[]) => rows;
         <div class="block-body">
           <div class="grid2">
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">Engraved divider</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">Engraved divider</p>
               <div class="bdivider">
                 <b class="leaf l">❧</b><i class="ln"></i><b class="mid">❖</b><i class="ln"></i><b class="leaf">❧</b>
               </div>
-              <p style="text-align:center;font-size:1.8rem;color:var(--accent);margin:.6rem 0">
+              <p style="text-align: center; font-size: 1.8rem; color: var(--accent); margin: 0.6rem 0">
                 ❦&nbsp;&nbsp;&nbsp;❖&nbsp;&nbsp;&nbsp;❧
               </p>
-              <p class="note" style="text-align:center">
+              <p class="note" style="text-align: center">
                 Crest ❦ · diamond ❖ · leaf ❧ — all in the display serif, accent-coloured, on a 1px emboss.
               </p>
             </div>
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">The printed grain</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">The printed grain</p>
               <p class="note">
                 A fine monochrome noise tile (<span class="mono">grain-noise.png</span>, 400 px) laid over every surface
                 that <strong>scrolls with the page</strong> — it is part of the material, never a fixed screen filter.
@@ -440,19 +439,19 @@ const Swatches = (rows: Swatch[]) => rows;
         <div class="block-body">
           <div class="grid2">
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">Buttons</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">Buttons</p>
               <div class="btn-row">
                 <span class="bbtn">Read more <span class="gl">→</span></span>
                 <span class="bbtn bbtn--solid"><span class="gl">❧</span> Memex</span>
               </div>
-              <p class="note" style="margin-top:1.4rem">
+              <p class="note" style="margin-top: 1.4rem">
                 Engraved outline by default (double inset keyline, small-caps label, trailing → in the display serif).
                 <span class="mono">.btn--solid</span> fills ink; <span class="mono">.btn--invert</span> /
                 <span class="mono">.btn--ghost</span> ride colour-blocks.
               </p>
             </div>
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">Catalog &amp; rail</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">Catalog &amp; rail</p>
               <div class="cardgrid">
                 <span class="bentry">
                   <div class="bno">1</div>
@@ -461,7 +460,7 @@ const Swatches = (rows: Swatch[]) => rows;
                     <p>
                       A project template to bootstrap &amp; streamline new work — CI/CD, security tests, linting, docs.
                     </p>
-                    <div class="label" style="margin-top:.7rem;color:var(--accent)">Template · CI/CD</div>
+                    <div class="label" style="margin-top: 0.7rem; color: var(--accent)">Template · CI/CD</div>
                   </div>
                   <ExternalSeal />
                 </span>
@@ -470,12 +469,12 @@ const Swatches = (rows: Swatch[]) => rows;
                   <div>
                     <h4 class="display">Harmon Ops</h4>
                     <p>Scripts, dotfiles, automation &amp; IaC for a developer environment and homelab.</p>
-                    <div class="label" style="margin-top:.7rem;color:var(--accent)">Infrastructure</div>
+                    <div class="label" style="margin-top: 0.7rem; color: var(--accent)">Infrastructure</div>
                   </div>
                   <ExternalSeal />
                 </span>
               </div>
-              <p class="note" style="margin-top:1rem">
+              <p class="note" style="margin-top: 1rem">
                 Hover: tint + content slides inward. Numerals Playfair italic. A single emblem only — the gilt ↗ seal,
                 top-right, marking links that leave the site (it lifts on hover); no second horizontal arrow.
               </p>
@@ -492,17 +491,17 @@ const Swatches = (rows: Swatch[]) => rows;
         </div>
         <div class="block-body">
           <p class="lead">
-            Two ceremonial page heroes beyond the Celestial home hero. <strong>Frontispiece</strong> is an inlaid book-cover
-            board with a rotating engraved sun; <strong>Plate</strong> splits the wordmark against an engraved printer's-device
-            colophon. Both carry the colour-block treatment and gold foil.
+            Two ceremonial page heroes beyond the Celestial home hero. <strong>Frontispiece</strong> is an inlaid
+            book-cover board with a rotating engraved sun; <strong>Plate</strong> splits the wordmark against an
+            engraved printer's-device colophon. Both carry the colour-block treatment and gold foil.
           </p>
 
-          <p class="eyebrow" style="margin:1.6rem 0 .9rem">Var. I · Frontispiece</p>
+          <p class="eyebrow" style="margin: 1.6rem 0 0.9rem">Var. I · Frontispiece</p>
           <div class="hero-demo">
             <HeroFrontispiece />
           </div>
 
-          <p class="eyebrow" style="margin:2rem 0 .9rem">Var. II · Plate</p>
+          <p class="eyebrow" style="margin: 2rem 0 0.9rem">Var. II · Plate</p>
           <div class="hero-demo">
             <HeroPlate />
           </div>
@@ -522,15 +521,13 @@ const Swatches = (rows: Swatch[]) => rows;
         <div class="block-body">
           <p class="lead">
             Engraved fields with small-caps labels; focus turns the keyline accent, and the invalid state turns it
-            madder/oxblood (the <span class="mono">--c-error</span> token). Buttons share one <span class="mono"
-              >.btn</span
-            >
-            family; tags are the quiet small-caps metadata mark.
+            madder/oxblood (the <span class="mono">--c-error</span> token). Buttons share one{' '}
+            <span class="mono">.btn</span>{'family'}; tags are the quiet small-caps metadata mark.
           </p>
 
-          <div class="grid2" style="margin-top:1.4rem">
+          <div class="grid2" style="margin-top: 1.4rem">
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">Inputs</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">Inputs</p>
               <div class="field-stack">
                 <Input label="Your name" placeholder="Ada Lovelace" />
                 <Input label="Electronic mail" type="email" placeholder="ada@example.com" />
@@ -545,22 +542,22 @@ const Swatches = (rows: Swatch[]) => rows;
               </div>
             </div>
             <div>
-              <p class="eyebrow" style="margin-bottom:.9rem">Buttons</p>
+              <p class="eyebrow" style="margin-bottom: 0.9rem">Buttons</p>
               <div class="btn-row">
                 <Button arrow={false}>Read more</Button>
                 <Button variant="solid" arrow={false} glyph="❧">Memex</Button>
               </div>
-              <div class="btn-row" style="margin-top:.9rem">
+              <div class="btn-row" style="margin-top: 0.9rem">
                 <Button size="sm" arrow={false}>Small</Button>
                 <Button arrow={false} disabled>Disabled</Button>
               </div>
-              <p class="note" style="margin-top:1.4rem">
+              <p class="note" style="margin-top: 1.4rem">
                 <span class="mono">.btn</span> default · <span class="mono">--solid</span> ink ·
                 <span class="mono">--invert</span> / <span class="mono">--ghost</span> ride the colour-block ·
                 <span class="mono">--sm</span> compact · <span class="mono">[disabled]</span> dims.
               </p>
 
-              <p class="eyebrow" style="margin:1.8rem 0 .9rem">Tags</p>
+              <p class="eyebrow" style="margin: 1.8rem 0 0.9rem">Tags</p>
               <div class="tag-row">
                 <Tag>Template · CI/CD</Tag>
                 <Tag tone="accent">Forthcoming</Tag>
@@ -578,7 +575,7 @@ const Swatches = (rows: Swatch[]) => rows;
           <h2 class="sec-title display">Colour-block</h2>
         </div>
         <div class="block-body">
-          <p class="note" style="margin-top:0">
+          <p class="note" style="margin-top: 0">
             The only filled surfaces — green on light, blue on dark — always carrying gold foil ornaments &amp;
             warm-white text. The closing “Let's Talk” block below is the canonical example.
           </p>
@@ -586,7 +583,7 @@ const Swatches = (rows: Swatch[]) => rows;
             <div class="crest">❦</div>
             <h3>Let's Talk</h3>
             <p class="btag">Send a word</p>
-            <div class="btn-row" style="justify-content:center">
+            <div class="btn-row" style="justify-content: center">
               <a class="bbtn bbtn--invert" href="/contact">Contact Me</a>
               <a class="bbtn bbtn--ghost" href="https://fantastical.app/evanharmon" target="_blank" rel="noopener"
                 >Meet With Me</a

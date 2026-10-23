@@ -37,44 +37,34 @@ const ariaInvalid = invalid ? 'true' : undefined;
 ---
 
 <div class:list={['almanac-field', className]}>
-  {
-    label && (
-      <label class="field-label" data-invalid={ariaInvalid} for={fieldId}>
-        {label}
-      </label>
-    )
-  }
-  {
-    multiline ? (
-      <textarea
-        id={fieldId}
-        name={name}
-        placeholder={placeholder}
-        required={required}
-        aria-invalid={ariaInvalid}
-        aria-describedby={errId}
-        set:text={value}
-      />
-    ) : (
-      <input
-        id={fieldId}
-        name={name}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        required={required}
-        aria-invalid={ariaInvalid}
-        aria-describedby={errId}
-      />
-    )
-  }
-  {
-    error && (
-      <div class="field-error" id={errId} role="alert">
-        {error}
-      </div>
-    )
-  }
+  {label && <label class="field-label" data-invalid={ariaInvalid} for={fieldId}>
+    {label}
+  </label>}
+  {multiline ? (
+    <textarea
+      id={fieldId}
+      name={name}
+      placeholder={placeholder}
+      required={required}
+      aria-invalid={ariaInvalid}
+      aria-describedby={errId}
+      set:text={value}
+    />
+  ) : (
+    <input
+      id={fieldId}
+      name={name}
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      required={required}
+      aria-invalid={ariaInvalid}
+      aria-describedby={errId}
+    />
+  )}
+  {error && <div class="field-error" id={errId} role="alert">
+    {error}
+  </div>}
 </div>
 
 <style>

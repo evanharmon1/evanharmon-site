@@ -12,24 +12,20 @@ import { PROJECTS } from '~/data/site';
     <SectionAside no="No. 2" title="Work" />
     <div class="sec-body">
       <div class="catalog">
-        {
-          PROJECTS.map((p, i) => (
-            <a
-              class="entry reveal"
-              href={p.href}
-              target={p.href.startsWith('http') ? '_blank' : undefined}
-              rel={p.href.startsWith('http') ? 'noopener' : undefined}
-            >
-              <div class="no">{i + 1}</div>
-              <div>
-                <h3 class="display">{p.title}</h3>
-                <p>{p.description}</p>
-                <div class="tag label">{p.kind}</div>
-              </div>
-              {p.href.startsWith('http') && <ExternalSeal />}
-            </a>
-          ))
-        }
+        {PROJECTS.map((p, i) => <a
+          class="entry reveal"
+          href={p.href}
+          target={p.href.startsWith('http') ? '_blank' : undefined}
+          rel={p.href.startsWith('http') ? 'noopener' : undefined}
+        >
+          <div class="no">{i + 1}</div>
+          <div>
+            <h3 class="display">{p.title}</h3>
+            <p>{p.description}</p>
+            <div class="tag label">{p.kind}</div>
+          </div>
+          {p.href.startsWith('http') && <ExternalSeal />}
+        </a>)}
       </div>
     </div>
   </div>

@@ -21,25 +21,19 @@ const { posts, withImages = false } = Astro.props;
 ---
 
 <div class:list={['ledger', withImages && 'ledger--media']}>
-  {
-    posts.map((b) => (
-      <a class="row reveal" href={b.href}>
-        <div class="lead">
-          <div class="date">{b.date}</div>
-          {withImages && b.image && (
-            <span class="thumb" aria-hidden="true">
-              <PostImage src={b.image} alt="" width={220} />
-            </span>
-          )}
-        </div>
-        <div>
-          <div class="t display">{b.title}</div>
-          <div class="ex">{b.excerpt}</div>
-        </div>
-        <div class="cat">{b.cat}</div>
-      </a>
-    ))
-  }
+  {posts.map((b) => <a class="row reveal" href={b.href}>
+    <div class="lead">
+      <div class="date">{b.date}</div>
+      {withImages && b.image && <span class="thumb" aria-hidden="true">
+        <PostImage src={b.image} alt="" width={220} />
+      </span>}
+    </div>
+    <div>
+      <div class="t display">{b.title}</div>
+      <div class="ex">{b.excerpt}</div>
+    </div>
+    <div class="cat">{b.cat}</div>
+  </a>)}
 </div>
 
 <style>
