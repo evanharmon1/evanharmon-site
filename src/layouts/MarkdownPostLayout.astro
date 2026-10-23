@@ -33,35 +33,25 @@ const { title, excerpt, publishDate, category, tags = [], image } = post.data;
         <RuleOrn style="max-width:24rem;margin:1.6rem auto 0" />
       </header>
 
-      {
-        image && (
-          <figure class="post-figure">
-            <PostImage
-              src={image}
-              alt={title}
-              widths={[480, 768, 1024]}
-              sizes="(max-width: 720px) 92vw, 680px"
-              loading="eager"
-            />
-          </figure>
-        )
-      }
+      {image && <figure class="post-figure">
+        <PostImage
+          src={image}
+          alt={title}
+          widths={[480, 768, 1024]}
+          sizes="(max-width: 720px) 92vw, 680px"
+          loading="eager"
+        />
+      </figure>}
 
       <div class="prose">
         <slot />
       </div>
 
-      {
-        tags.length > 0 && (
-          <div class="tags">
-            {tags.map((t) => (
-              <a class="tag label" href={tagHref(t)}>
-                {t}
-              </a>
-            ))}
-          </div>
-        )
-      }
+      {tags.length > 0 && <div class="tags">
+        {tags.map((t) => <a class="tag label" href={tagHref(t)}>
+          {t}
+        </a>)}
+      </div>}
     </article>
 
     <div class="post-foot">
