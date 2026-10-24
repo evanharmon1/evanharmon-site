@@ -129,10 +129,10 @@ jobs:
             config_file: .devcontainer/agent/devcontainer.json
             image_name: ghcr.io/evanharmon1/evanharmon-site-devcontainer-agent
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # renovate: datasource=node-version
           node-version: "24"
@@ -427,7 +427,7 @@ jobs:
           fi
           echo "Untrusted fork trust boundary enforced: no repository-controlled devcontainer job ran."
       - if: env.IS_FORK != 'true'
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # The detector itself must always run: if IT was skipped or failed, the
