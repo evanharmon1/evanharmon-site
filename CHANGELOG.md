@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.7](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.6...v0.3.7) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** raise security floors for high-severity advisories ([#123](https://github.com/evanharmon1/evanharmon-site/issues/123)) ([760c1bb](https://github.com/evanharmon1/evanharmon-site/commit/760c1bb3bf08eb6d513ab1679acc433272c1efc0))
+* sync harmon-devkit skills to v0.58.1 ([#122](https://github.com/evanharmon1/evanharmon-site/issues/122)) ([e27c910](https://github.com/evanharmon1/evanharmon-site/commit/e27c910ff747945479a66b0d49af8a9f79589265))
+
 ## [0.3.6](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.5...v0.3.6) (2026-10-12)
 
 
