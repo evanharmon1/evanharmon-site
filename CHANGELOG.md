@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.8](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.7...v0.3.8) (2026-10-24)
+
+
+### Bug Fixes
+
+* **ci:** refresh review cycle accounting and dependency security floor ([#126](https://github.com/evanharmon1/evanharmon-site/issues/126)) ([270643f](https://github.com/evanharmon1/evanharmon-site/commit/270643f8bb977c50bd82abd07f3d9ef1ca688c68))
+
 ## [0.3.7](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.6...v0.3.7) (2026-10-23)
 
 
