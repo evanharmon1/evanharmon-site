@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.8](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.7...v0.3.8) (2026-10-25)
+
+
+### Bug Fixes
+
+* **ci:** refresh review cycle accounting and dependency security floor ([#126](https://github.com/evanharmon1/evanharmon-site/issues/126)) ([270643f](https://github.com/evanharmon1/evanharmon-site/commit/270643f8bb977c50bd82abd07f3d9ef1ca688c68))
+* **deps:** update astro ([#138](https://github.com/evanharmon1/evanharmon-site/issues/138)) ([397026f](https://github.com/evanharmon1/evanharmon-site/commit/397026f0f736fd0cf49678d7e5cac0c2063924e3))
+* **deps:** update dependency lucide-react to v1 ([#139](https://github.com/evanharmon1/evanharmon-site/issues/139)) ([a3b144e](https://github.com/evanharmon1/evanharmon-site/commit/a3b144ee7f0958a9c3027236f824964866f7cb56))
+* **deps:** update dependency tailwind-merge to v3 ([#140](https://github.com/evanharmon1/evanharmon-site/issues/140)) ([4aa6014](https://github.com/evanharmon1/evanharmon-site/commit/4aa6014d8371cb70a001703ba01b92479be1f58c))
+
 ## [0.3.7](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.6...v0.3.7) (2026-10-23)
 
 
