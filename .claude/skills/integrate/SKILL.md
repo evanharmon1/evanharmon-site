@@ -1030,8 +1030,10 @@ timing (§2's first bullet), then begin the checks watch. Leave Project fields u
     already-non-draft path prescribes; do **not** call `gh pr ready` again.
     Only audit status `pass` on the current head may be recorded, never
     `audit-behind`; catch up a behind head first. Record the accepted promotion
-    with `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --at <the ready_for_review event time>`
-    and the existing slate/session/owner/run arguments, as on exit 17.
+    with `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --exit "reconciled ready_for_review event <event id> at <event time>"`
+    and the existing slate/session/owner/run arguments, as on exit 17. Omit
+    `--at` so the writer records reconciliation time; the `--exit` retains the
+    original event ID and time for attribution.
     Reverting a promotion the gate would itself have made un-notifies nobody
     and can override a genuine human click.
   - **Indeterminate, or ordinary post-promotion drift — report, never undo.**
@@ -2639,9 +2641,12 @@ that loops indefinitely:
    inputs. The command is deliberately outside this skill's allowed-tools;
    invoke it through the normal permission mechanism. The gate stays read-only.
 
-   Before the ready mutation the command validates the existing slate lock
-   and owner token through read-only `run-record.mjs lock check` (exit 16
-   refuses without notifying anyone). Every GitHub call is bounded by
+   Before the ready mutation the command rehearses the full promotion-candidate
+   validation through read-only `run-record.mjs promote --check`, using the
+   captured slate, session, owner token, run, head, gate fingerprint, and
+   `promoted_at`. This durable-write-free precheck exercises the same writer
+   validation that the real promotion repeats after remote confirmation; exit
+   16 is its refusal boundary, before notifying anyone. Every GitHub call is bounded by
    `timeout -k 1 60` (or `gtimeout`); the fingerprint uses the gate's five
    individually bounded network reads. There are no read retries: after mutation
    there are at most ten network calls (ready, scalar read, five fingerprint
@@ -2655,9 +2660,10 @@ that loops indefinitely:
    command on resumption: if promotion landed, exit 17 routes an unrecorded
    promotion to reconciliation, or exit 12 routes a recorded promotion to audit.
 
-   The command runs check → ready (exactly once) → scalar read → fingerprint
-   → head re-read → record. Both scalar reads require an open PR, the expected
-   head and `isDraft == false`; the fingerprint must be identical to the passing gate's.
+   The command runs check → promotion precheck → ready (exactly once) → scalar
+   read → fingerprint → head re-read → record. Both scalar reads require an
+   open PR, the expected head and `isDraft == false`; the fingerprint must be
+   identical to the passing gate's.
    The head re-read follows the fingerprint because the hash excludes the head.
    The command will re-read the content fingerprint using
    `readiness-gate.sh fingerprint --repo "$repo" --pr <n>`.
@@ -2670,15 +2676,17 @@ that loops indefinitely:
    no mutation; audit the current head (below);
    **13** mismatch or writer refusal, undone and confirmed draft;
    **14** remote state unknown after one undo; **15** ready command failed,
-   undone and confirmed draft; **16** slate owner validation refused before
+   undone and confirmed draft; **16** full promotion precheck refused before
    mutation; **17** unrecorded non-draft promotion, routed to §2’s
    unexplained-promotion procedure. When §2's reconcile branch accepts the
    promotion (the current head independently passes `readiness-gate.sh audit`),
    the orchestrator records it with
-   `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --at <the ready_for_review event time>`
-   and the existing slate/session/owner/run arguments. Only audit status `pass`
+   `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --exit "reconciled ready_for_review event <event id> at <event time>"`
+   and the existing slate/session/owner/run arguments. Omit `--at` so the writer
+   records reconciliation time; the `--exit` retains the original event ID and
+   time for attribution. Only audit status `pass`
    on the current head may be recorded, never `audit-behind`; catch up a behind
-   head first. The event time correlates `promoted_at` with §2's timeline.
+   head first. The recorded exit correlates the original event with §2's timeline.
    Otherwise it reports,
    and the run stays open until `run-record.mjs close`. Gate diagnostics (including `remediation-capped`
    and `integration-exit-indeterminate`) are surfaced unchanged. No second
@@ -2688,8 +2696,10 @@ that loops indefinitely:
 
    The following marker documents the command's internal record call; it is
    not a second caller-side step. `head` and `gate_fingerprint` come verbatim
-   from the confirmed reads; `promoted_at` is their UTC confirmation time.
-   With `support_dir` resolved physically, the command invokes:
+   from the confirmed reads. `promoted_at` is captured before the writer
+   precheck, then passed unchanged to the real writer after remote
+   confirmation; it is not the confirmation time. With `support_dir` resolved
+   physically, the command invokes:
 
    <!-- promotion-record-command -->
 
@@ -2760,8 +2770,10 @@ that loops indefinitely:
    a head that independently passes the gate — reconciling *is* this paragraph
    and its `audit` run. For that accepted unexplained promotion, use the same
    record step as exit 17:
-   `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --at <the ready_for_review event time>`
-   with the existing slate/session/owner/run arguments. Only audit status `pass`
+   `run-record.mjs promote --head <head> --fingerprint <audit fingerprint> --exit "reconciled ready_for_review event <event id> at <event time>"`
+   with the existing slate/session/owner/run arguments. Omit `--at` so the writer
+   records reconciliation time; the `--exit` retains the original event ID and
+   time for attribution. Only audit status `pass`
    on the current head may be recorded, never `audit-behind`; catch up a behind
    head first. An already recorded promotion needs no second record write.
    The choice between reconciling and a single undo is made in §2, not here.
