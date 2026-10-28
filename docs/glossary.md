@@ -18,7 +18,14 @@ project-specific (domain) terms as the model firms up.
 | bot / dev / agent posture | The three devcontainer postures, told apart by the `FOREMAN_DEVCONTAINER` marker (`bot`, unset, `agent`): `bot` (`.devcontainer/`, AI agents on controlled infrastructure, no Tailscale), `dev` (`.devcontainer/dev/`, human, with Tailscale), and `agent` (`.devcontainer/agent/`, unattended agents, never looser than bot: its own PAT, Claude Code and Codex only, allowlisted egress, no Docker by default). See [guides/devcontainers.md](guides/devcontainers.md). |
 | 1Password Environments | How devcontainer/local secrets are supplied — a virtual `.env` mounted over a pipe, never written to disk or git. |
 | bot vs operator | Two identities: the AI **bot** account (scoped; `main` needs code-owner approval and green checks, and though its `pull_requests: write` PAT can perform a merge a human has approved, merging stays the maintainer's decision) and the human **operator** (full access). See [architecture/security.md](architecture/security.md). |
+| Routing class | A group of jobs defined by the reason it needs different runner placement: default, browser, image-build, multicore or isolated. |
+| Routing variable | A GitHub Actions variable naming a routing class whose JSON value selects a runner label set; the name never names a provider. |
+| Disposable host | A runner whose host is destroyed with the job. |
+| Homelab runner | A runner on hardware the maintainer owns; its jobs may run in ephemeral containers, but the host persists between jobs. |
 | TODO: term | TODO: project-specific definition |
+
+GitHub's `self-hosted` label is not a domain term: it covers both
+hosted-ephemeral and homelab runners and does not establish host lifetime.
 
 ## Issue classification
 
@@ -46,4 +53,4 @@ storage.
 | Size | Retired: superseded by Effort (human tasks) and Complexity (every issue). |
 | `suggest:*` | Retired: the family suggestion, superseded by Tier; its namespace is removed from the agent registry. |
 | `tier:adaptive` | Retired 2026-10-01: no rung on the Tier scale. The label is removed and the issue resolves through its derived Tier. |
-| `needs-review` | The issue's PR is waiting for human review; it keeps the issue out of the agent queue. The integration stage adds it at ready-for-review, when it removes `claim:*`, and removes it if review sends the work back, once harmon-devkit#1255 ships with a skills-pin bump. Until then a human adds it, and removes it on pull-back, by hand, as the Views section of [project-management.md](project-management.md#views) describes. |
+| `needs-review` | An agent still owes review work on the issue's delivery PR (triggers, responses, fixes, adjudications); keeps the issue out of the agent queue. Removed when the agent owes none, including handoff to a human; a PR waiting on a human uses `merge-ready` or `parked`. Also clears when the PR ends (merged into any branch or closed unmerged) or the issue closes. Until the vendored `integrate` skill picks up harmon-devkit#1608, it still adds the label at handoff; leave it in place until the PR ends, as the Views section of [project-management.md](project-management.md#views) describes. |

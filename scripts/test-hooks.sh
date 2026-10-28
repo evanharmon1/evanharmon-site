@@ -125,12 +125,9 @@ EOF
 COMMAND
 )"
 
-continued_commit="$(
-    cat <<'COMMAND'
-git commit \
--m "bad message"
-COMMAND
-)"
+# Bash 3.2 strips backslash-newline in a quoted heredoc inside $(...), so
+# generate this fixture as data rather than letting the legacy parser fold it.
+continued_commit="$(printf '%s\n' 'git commit \' '-m "bad message"')"
 
 for commit_hook in \
     "$repo/.claude/hooks/enforce-conventional-commits.sh" \

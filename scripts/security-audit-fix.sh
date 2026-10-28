@@ -49,11 +49,13 @@
 #       (the commit the audit ran on) is set and the base has moved past it,
 #       publishes nothing and exits 0: the next run re-audits.
 #
-# Exit codes: 0 done (clean, no-op, or applied), 1 operational failure,
-# 3 refused (strict fix only).
+# Exit codes: 0 done (clean, no-op, or applied), 1 operational failure
+# (including an unsupported or unparseable pnpm version), 3 refused (strict fix only).
 # Exit 3 also covers a pnpm-workspace.yaml yq cannot parse or write, and a
 # template floor block with only one of its two marker lines.
-# Depends on: pnpm 11+, jq, yq (mikefarah v4); publish also needs git and gh.
+# Depends on: pnpm 10–12, jq, yq (mikefarah v4); publish also needs git and gh.
+# Fix reads pnpm --version once: 10 uses --fix, 11/12 use --fix=override.
+# Malformed or unsupported versions fail before auditing or changing files.
 # Unit-tested by harmon-init's scripts/test-security-audit-fix.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -402,7 +404,7 @@ carry_release_age_excludes() {
         # name or any other version form falls back to the package.
         _ra_pkg="$_ra" _ra_ver=""
         case "$_ra" in ?*@*) _ra_pkg="${_ra%@*}" _ra_ver="${_ra##*@}" ;; esac
-        if printf '%s\n' "$_ra_ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        if grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$_ra_ver"; then
             _ra_set="$WORK/applied-lines.txt" _ra_want="$_ra_pkg@$(major_key "$_ra_ver")"
         else
             _ra_set="$WORK/applied-pkgs.txt" _ra_want="$_ra_pkg"
@@ -454,6 +456,8 @@ audit_rows() {
         cat "$WORK/audit.err" >&2
         fail "pnpm audit did not return an advisory report (registry or network failure?)"
     }
+    ./scripts/security-audit.sh filter "$_ar_json" "$WORK/filtered.json" ||
+        fail "security audit allowances could not be verified"
     jq -r '
         .advisories[]
         | select(.severity == "high" or .severity == "critical")
@@ -465,7 +469,7 @@ audit_rows() {
             ((.paths[0] // ".") | split(">") | .[1] // $a.module_name),
             ($a.patched_versions // "") ]
         | @tsv
-    ' "$_ar_json" | sort -u >"$1"
+    ' "$WORK/filtered.json" | sort -u >"$1"
 }
 
 # major_rows ID_COL PKG_COL VERSION_COL — "id pkg@major" for each TSV row on
@@ -633,6 +637,15 @@ cmd_fix() {
         shift
     done
     need_bin pnpm
+    _pnpm_version="$(pnpm --version)" || die "could not read pnpm version: $_pnpm_version"
+    [[ "$_pnpm_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
+        die "unparseable pnpm version '$_pnpm_version' (supported majors: 10–12)"
+    _pnpm_major="${_pnpm_version%%.*}"
+    case "$_pnpm_major" in
+    10) _pnpm_fix=--fix ;;
+    11 | 12) _pnpm_fix=--fix=override ;;
+    *) die "unsupported pnpm version '$_pnpm_version' (supported majors: 10–12)" ;;
+    esac
     need_bin jq
     # Every pnpm-workspace.yaml read and write goes through yq; without it the
     # script cannot touch the file safely, so it refuses before doing anything.
@@ -662,10 +675,10 @@ cmd_fix() {
     overrides_tsv "$WORKSPACE" >/dev/null
     template_keys | sort -u >"$WORK/template-keys.txt"
 
-    note "running pnpm audit --fix to learn the patched versions"
-    pnpm audit --fix --audit-level=high >"$WORK/fix.log" 2>&1 || {
+    note "running pnpm audit $_pnpm_fix to learn the patched versions"
+    pnpm audit "$_pnpm_fix" --audit-level=high >"$WORK/fix.log" 2>&1 || {
         cat "$WORK/fix.log" >&2
-        fail "pnpm audit --fix failed"
+        fail "pnpm audit $_pnpm_fix failed"
     }
     # What pnpm proposed = the entries whose value differs from the original
     # map, both read by yq.

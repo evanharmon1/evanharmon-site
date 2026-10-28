@@ -23,18 +23,30 @@ inputs:
     default: "false"
   cache:
     description: >-
-      Enable the pnpm dependency cache. Turn OFF for credential-holding jobs —
+      Enable dependency and browser caches. Turn OFF for credential-holding jobs —
       the repo-wide Actions cache is writable from lower-trust PR runs, so a
       job with push/deploy tokens takes the cold-install trade instead.
     default: "true"
+  browsers:
+    description: Restore/save Playwright browsers (requires cache true).
+    default: "false"
+  browser-set:
+    description: Playwright browser set (all or chromium).
+    default: all
 
 runs:
   using: composite
   steps:
+    - name: Reject unsafe browser cache configuration
+      if: inputs.browsers == 'true' && inputs.cache != 'true'
+      shell: bash
+      run: |
+        echo '::error::browsers: true requires cache: true; credential-holding jobs must disable browsers and cache.' >&2
+        exit 1
     - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-    # PNPM_CONFIG_STORE_DIR is pnpm's environment-variable form of
-    # `--store-dir`, verified empirically with pnpm 11 and 12 via
-    # `pnpm config get store-dir`. $RUNNER_TEMP is emptied for every job;
+    # pnpm 10 reads npm_config_store_dir; pnpm 11+ reads
+    # PNPM_CONFIG_STORE_DIR. Export both forms of `--store-dir` to the
+    # same job-private base. $RUNNER_TEMP is emptied for every job;
     # unlike pnpm's user/global config or a sibling of $GITHUB_WORKSPACE, it
     # cannot leak a store across jobs or repositories on a persistent runner.
     - name: Export job-private pnpm store
@@ -43,6 +55,7 @@ runs:
         : "${RUNNER_TEMP:?RUNNER_TEMP is required to isolate the pnpm store}"
         store_dir="${RUNNER_TEMP}/.pnpm-store"
         echo "PNPM_CONFIG_STORE_DIR=${store_dir}" >> "$GITHUB_ENV"
+        echo "npm_config_store_dir=${store_dir}" >> "$GITHUB_ENV"
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
       with:
         # renovate: datasource=node-version
@@ -55,7 +68,7 @@ runs:
         resolved="$(pnpm config get store-dir)"
         echo "pnpm config get store-dir: ${resolved}"
         if [ "$resolved" != "$store_dir" ]; then
-          echo "::error::pnpm did not honor PNPM_CONFIG_STORE_DIR: expected ${store_dir}, got ${resolved}" >&2
+          echo "::error::pnpm did not honor the job-private store export: expected ${store_dir}, got ${resolved}" >&2
           exit 1
         fi
         effective="$(pnpm store path)"
@@ -296,3 +309,54 @@ runs:
         SHARP_IGNORE_GLOBAL_LIBVIPS: "1"
       run: |
         if [ -f package.json ]; then pnpm install --frozen-lockfile; fi
+    - name: Resolve installed Playwright cache identity
+      if: inputs.browsers == 'true'
+      id: playwright-version
+      shell: bash
+      env:
+        BROWSER_SET: ${{ inputs.browser-set }}
+      run: |
+        case "$BROWSER_SET" in
+          all|chromium) ;;
+          *) echo '::error::browser-set must be all or chromium' >&2; exit 1 ;;
+        esac
+        node <<'NODE' >> "$GITHUB_OUTPUT"
+        const fs = require('node:fs');
+        const { spawnSync } = require('node:child_process');
+        if (process.env.PLAYWRIGHT_BROWSERS_PATH || process.env.XDG_CACHE_HOME) {
+          const name = process.env.PLAYWRIGHT_BROWSERS_PATH ? 'PLAYWRIGHT_BROWSERS_PATH' : 'XDG_CACHE_HOME';
+          console.error(`::notice::Browser cache disabled: ${name} is set.`);
+          console.log('cacheable=false');
+          process.exit(0);
+        }
+        try {
+          const cli = spawnSync('node_modules/.bin/playwright', ['--version'], { encoding: 'utf8' });
+          const version = cli.status === 0 && /^Version ([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]+)?)\s*$/.exec(cli.stdout);
+          if (!version) {
+            console.error('::notice::Browser cache disabled: installed Playwright CLI version could not be resolved.');
+            console.log('cacheable=false');
+            process.exit(0);
+          }
+          const release = Object.fromEntries(fs.readFileSync('/etc/os-release', 'utf8').split('\n')
+            .map(line => /^([A-Z_]+)=(.*)$/.exec(line)).filter(Boolean)
+            .map(m => [m[1], m[2].replace(/^['"]|['"]$/g, '')]));
+          if (![release.ID, release.VERSION_ID].every(v => v && /^[0-9A-Za-z._-]+$/.test(v))) {
+            console.error('::notice::Browser cache disabled: /etc/os-release has no usable ID or VERSION_ID.');
+            console.log('cacheable=false');
+          } else {
+            console.log(`version=${version[1]}`);
+            console.log(`platform=${release.ID}-${release.VERSION_ID}`);
+            console.log('cacheable=true');
+          }
+        } catch {
+          console.error('::notice::Browser cache disabled: /etc/os-release could not be read.');
+          console.log('cacheable=false');
+        }
+        NODE
+    - name: Cache Playwright browsers
+      if: inputs.browsers == 'true' && steps.playwright-version.outputs.cacheable == 'true' && runner.environment == 'github-hosted'
+      id: browsers-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.platform }}-${{ steps.playwright-version.outputs.version }}-${{ inputs.browser-set }}

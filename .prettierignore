@@ -22,6 +22,8 @@ node_modules/
 dist/
 .task/
 .worktrees/
+.lane/
+.lane-report.md
 .terraform/
 .venv/
 pnpm-lock.yaml
