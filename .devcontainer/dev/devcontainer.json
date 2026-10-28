@@ -115,7 +115,7 @@
     "GITHUB_TOKEN": "",
     "GH_ENTERPRISE_TOKEN": "",
     "GITHUB_ENTERPRISE_TOKEN": "",
-    "HARMON_BOT_AUTONOMY_ANTIGRAVITY": "disabled"
+    "HARMON_BOT_AUTONOMY_ANTIGRAVITY": "enabled"
   },
   "postCreateCommand": "bash .devcontainer/dev/post-create.sh",
   "postStartCommand": "bash .devcontainer/dev/post-start.sh",

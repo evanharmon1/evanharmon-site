@@ -335,7 +335,7 @@ for settings in "$agent_settings" 'template/[% if devcontainer %].devcontainer[%
 done
 
 # Run only a recording stub; no network request or real GitHub mutation.
-wrapper_bin="${work_dir}/wrapper-bin"
+wrapper_bin="${work_dir}/wrapper bin"
 mkdir -p "$wrapper_bin"
 cat >"${wrapper_bin}/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -376,10 +376,11 @@ if [ -n "$system_gh" ]; then
 else
     echo "NOTE: no gh in the wrapper's pinned PATH on this host; skipping the live PATH probe"
 fi
-# Only the argument-contract fixture replaces the PATH pin with the recording
-# stub's directory. No production file or system executable is changed.
+# Only the argument-contract fixture removes the PATH pin: run_wrapper supplies
+# the recording stub through the environment, keeping paths with spaces as data.
+# No production file or system executable is changed.
 wrapper="${work_dir}/wrapper-with-stub"
-sed "s|^export PATH=.*|export PATH=${wrapper_bin}:$PATH|" "$shipped_wrapper" >"$wrapper"
+sed '/^export PATH=/d' "$shipped_wrapper" >"$wrapper"
 # This contract refuses any implementation that does not pin the outgoing GET.
 wrapper_contract() {
     run_wrapper "$1" 'repos/example/repo?per_page=100' --paginate --jq '.items[]' || return 1
@@ -1274,7 +1275,7 @@ grep -Fq 'post-start: CRITICAL: could not close egress' "${work_dir}/post-start.
     fail "the agent post-start fallback did not print the CRITICAL line on the original stderr: $(cat "${work_dir}/post-start.stderr")"
 ! grep -Fq 'left at DROP' "${work_dir}/post-start.log" ||
     fail "the agent post-start fallback claimed DROP although the ip6tables policy failed with global IPv6 present"
-! grep -Ev '^[[:space:]]*#' .devcontainer/agent/post-start.sh | grep -Eq 'egress-allowlist\.txt|\.devcontainer/scripts/egress-allowlist\.sh' ||
+! grep -Ev '^[[:space:]]*#' .devcontainer/agent/post-start.sh | grep -E 'egress-allowlist\.txt|\.devcontainer/scripts/egress-allowlist\.sh' >/dev/null ||
     fail "the agent post-start reads the checkout's egress applier or lists (only the root-owned snapshot may be applied at start)"
 jq -e '.runArgs | index("--cap-add=NET_ADMIN")' <<<"$agent_cfg" >/dev/null ||
     fail "the agent devcontainer lacks --cap-add=NET_ADMIN, so the egress filter cannot be installed"

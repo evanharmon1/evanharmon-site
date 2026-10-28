@@ -108,7 +108,7 @@
     // runs against the RENDERED tree with no access to that answer.
     "AGY_CLI_DISABLE_AUTO_UPDATE": "true",
     "FOREMAN_DEVCONTAINER": "bot",
-    "HARMON_BOT_AUTONOMY_ANTIGRAVITY": "disabled",
+    "HARMON_BOT_AUTONOMY_ANTIGRAVITY": "enabled",
     "HARMON_BOT_AUTONOMY_COPILOT": "disabled",
     "COPILOT_ALLOW_ALL": "false"
   },

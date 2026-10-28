@@ -34,7 +34,7 @@ repositories and for profiles without a CodeQL workflow.
 | **SAST** — flaws in *your own code* | injection, XSS, SSRF, path traversal, crypto/auth misuse | **CodeQL** for public repos; **Semgrep CE** for free private repos | CodeQL runs automatically in public CI. Private CI uses Semgrep unless paid GitHub Code Security + `FULL_SECURITY_SCAN=true` opts into CodeQL |
 | **SCA** — CVEs in *dependencies* | vulnerable third-party packages | **Dependabot alerts** + **`task security:audit`** (`pnpm audit`) | Dependabot continuous; audit in the CI `security` job + `task security` locally; the security-floor block is template-owned and arrives via `copier update`; each floor uses a `pkg@<major>` key and is bounded below the next major; the block never crosses a major; 0.x floors select only the fixture graph's tested minors and are bounded below the next minor of the moved version; a 0.x minor is moved only where upstream published no in-minor patch and the entry says so; the fixture toolchain builds with those moved versions; other 0.x minor edges are left for consumer audit and a local floor after validation; local floors below the end marker inside `overrides` follow the same shape (quote a scoped package key: `'@scope/pkg@7'`); when a later template version floors a release line you floored locally, delete your local entry; after a template update changes the block, run `pnpm install --no-frozen-lockfile` and commit `pnpm-lock.yaml` (pnpm records the `overrides` in the lockfile, so a frozen install — for example, the CI setup action, `scripts/setup-remote.sh`, `task worktree:new`, or any shell with `CI` set — fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` until the lockfile matches the block); raise a local floor with `task security:audit:fix`, never raw `pnpm audit --fix` (see [Scheduled audit remediation](#scheduled-audit-remediation)); Harmon Init CI audits only the Astro fixture graph against the shipped block, not the rest of a real repository's graph: an advisory in a package the fixture does not use surfaces in the consumer's own `pnpm audit`, so floor it locally with `task security:audit:fix` and report it upstream; an advisory on a release line the block already floors (its `pkg@<major>` or `pkg@0.<minor>` key) is refused there, so raise that one upstream instead |
 | **Secrets** — committed credentials | keys, tokens, certs, `.env` | **gitleaks** (`task security:secrets`) | pre-push git hook + CI `security` job |
-| **IaC** — insecure infrastructure | open security groups, public buckets, … | **checkov** (`task lint:terraform:security`) | CI `lint` job + `task check` locally (Terraform repos) |
+| **IaC** — insecure infrastructure | open security groups, public buckets, … | **checkov** (`task lint:terraform:security`) | CI `check` job + `task check` locally (Terraform repos) |
 | **Freshness/remediation** — stale or vulnerable dependencies | a widening exposure window | **Renovate** (`minimumReleaseAge: 3 days`, Dependabot-alert remediation enabled) | continuous update and vulnerability-fix PRs |
 
 The repository-class policy is:
@@ -73,6 +73,17 @@ automatically on every **public** repository: GitHub code scanning and standard
 GitHub-hosted Actions runners are free there. CodeQL is preferred over Semgrep CE
 for these stacks because its queries include deeper interprocedural and data-flow
 analysis and integrate directly with GitHub's Security tab.
+
+With the shipped advanced CodeQL workflow, GitHub's CodeQL **Default setup**
+must be off (**Settings → Advanced Security → CodeQL analysis**, or
+`gh api --method PATCH repos/OWNER/REPO/code-scanning/default-setup -f state=not-configured`),
+because GitHub refuses advanced uploads while Default setup is on. If Default
+setup was enabled after the advanced workflow existed, GitHub disabled that
+workflow — then re-enable the CodeQL workflow (**Actions → CodeQL → "Enable
+workflow"**, or `gh workflow enable codeql.yml`). Public repositories
+frequently have Default setup auto-enabled, which causes `analyze` and the
+required `codeql-verify` check to fail on SARIF upload until Default setup is
+disabled; keep it off after disabling it.
 
 For **private/internal** repositories, CodeQL code scanning requires an
 organization on GitHub Team or Enterprise with
@@ -142,14 +153,76 @@ enabled, so a Python project on the free posture gets far less than the setting
 implies). Establish the real depth for the stack you actually ship, per tool,
 and treat a green run as evidence only for what you confirmed it inspects.
 
+### Unpatched dev-only advisory allowances
+
+`task security:audit` uses `scripts/security-audit.sh` for Node dependencies.
+The default remains `pnpm audit --audit-level=high`. A missing allowance file,
+or the empty seed, grants no exceptions. The repo owns
+`.security-audit-allowances.json`: Copier seeds `{ "allowances": [] }` once
+and never overwrites it on `copier update`.
+
+A maintainer may approve an entry through review when no fix exists:
+
+```json
+{
+  "allowances": [
+    {
+      "ghsa": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Unpatched lint dependency; reviewed exception",
+      "tracking_issue": "https://github.com/owner/repo/issues/123",
+      "added": "2026-10-14",
+      "expires": "2026-11-13"
+    }
+  ]
+}
+```
+
+Every run re-checks the live full and `--prod` audit reports before merging
+allowed IDs into `auditConfig.ignoreGhsas` in a private temporary copy of the
+full lockfile and project configuration, then runs the ordinary high audit
+there. This supports pnpm 10.x, 11.x and 12.x. Existing pnpm 12
+`audit.ignore` lists are merged too, so they cannot shadow the legacy setting.
+The helper edits YAML through the already-shipped `uv` runner and pinned
+YAML 1.2 parser (`ruamel.yaml`),
+preserving other settings without requiring the optional `yq` binary. Repository files remain untouched and no ignore survives the run. The entry must name a live advisory for the exact
+package, have no published patched version anywhere, and be absent from the production
+report. npm sometimes reports a patched range whose releases do not exist; the
+helper queries `pnpm view "package@patched-range" version --json` and accepts
+only an explicit no-matching-version response. A `<0.0.0` patched range has no
+possible patch. pnpm 12 can instead report a null patch range when its inferred
+patch is unpublished or deprecated. Null alone proves nothing: the helper
+queries all published package versions and allows the entry only when every
+release falls within the advisory's vulnerable range. This independent proof
+handles plain numeric `<x.y.z` and `<=x.y.z` bounds; other ranges, prerelease or
+build versions, malformed results and registry failures remain unknown and fail
+closed. A published release outside the range refuses the allowance, even if
+pnpm reports null. Dates use UTC `YYYY-MM-DD`; the expiry date
+is inclusive and may be at most 90 days after `added`. Future added dates,
+impossible dates, missing metadata, expired entries, longer windows, production
+reachability, available patches, and stale entries all fail with named reasons.
+Registry failures or unknown patch metadata cannot grant an exception. Remove
+stale entries; an expired entry requires a fresh, reviewed renewal, never a
+far-future expiry.
+
+This is a reviewed exception for **unpatched dev-only dependencies**. It never
+covers production dependencies or fixable advisories; use security floors,
+Renovate, or a deliberate dependency upgrade for those. `security:audit:fix`
+and the scheduled workflow use the same validation and exclude allowed
+advisories, so an allowed-only report produces no remediation PR. Unrelated
+advisories still gate and follow the usual fix path.
+
 ### Scheduled audit remediation
 
 The PR audit reacts to the world changing, not to your diff, so a newly
 published transitive `high` turns `security` red on every open PR at once. The
 remediation is mechanical, and the template does it for you:
 
-- **`task security:audit:fix`** runs `pnpm audit --fix --audit-level=high` only
-  to learn which patched version each advisory needs, restores
+- **`task security:audit:fix`** runs `pnpm audit --fix=override --audit-level=high`
+  on pnpm 11/12 and `pnpm audit --fix --audit-level=high` on pnpm 10, only
+  to learn which patched version each advisory needs. An unsupported or
+  unparseable pnpm version (supported majors: 10–12) stops it with exit 1
+  before it audits or edits anything. It restores
   `pnpm-workspace.yaml` byte-for-byte, and writes its own floor for each
   one below the template-owned block's end marker: `pkg@<major>: '>=x.y.z
   <next-major'` (0.x: `pkg@0.m: '>=0.m.p <0.(m+1)'`) with a comment naming the
@@ -192,7 +265,8 @@ remediation is mechanical, and the template does it for you:
   audit in it fails, it runs `task security:audit:fix -- --skip-refused` (apply what is safe,
   report what is refused) and opens or updates **one** rolling draft PR on
   `bot/security-audit-fix` listing each advisory, package, floor, and refusal
-  reason. The PR `security` gate is unchanged, so it stays red until that PR (or
+  reason. The PR `security` gate applies the same reviewed allowances; other findings
+  stay red until that PR (or
   a deliberate upgrade for a refused fix) merges. See
   [ci-cd.md](ci-cd.md#workflows) for the trigger and token.
 
@@ -632,6 +706,9 @@ nothing more:
 | Contents | Read and write | commits, branches, tags, releases |
 | Pull requests | Read and write | open/update the release PR and claude PRs |
 | Issues | Read and write | claude comments/labels/updates issues |
+| Checks | Read-only | claude-implement watches CI with `gh pr checks`, including on private repos |
+| Commit statuses | Read-only | claude-implement reads the status rollup with `gh pr checks` |
+| Actions | Read-only | claude-implement reads workflow-run metadata with `gh pr checks`; org project-automation reads CI run results |
 | Workflows | Read and write | claude may edit files under `.github/workflows/` |
 | Metadata | Read-only | required baseline |
 

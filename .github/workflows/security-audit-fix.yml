@@ -69,7 +69,7 @@ jobs:
         id: node-audit
         if: steps.audit.outcome == 'failure'
         continue-on-error: true
-        run: pnpm audit --audit-level=high
+        run: ./scripts/security-audit.sh
       - name: Raise bounded security floors
         id: fix
         if: steps.node-audit.outcome == 'failure'
@@ -104,7 +104,7 @@ jobs:
   publish:
     needs: audit
     if: needs.audit.outputs.patch == 'true' && vars.CI_APP_CLIENT_ID != ''
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(vars.ISOLATED_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 15
     steps:
       # CI GitHub App token, not GITHUB_TOKEN: a PR opened by GITHUB_TOKEN

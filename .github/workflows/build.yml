@@ -33,7 +33,25 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  changes:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Both parents of the PR merge ref: first parent is the live base.
+          fetch-depth: 2
+      - name: Classify docs-only changes (fail closed)
+        id: classify
+        run: ./scripts/ci-changes-classify.sh >> "$GITHUB_OUTPUT"
+
+  check:
     # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
     # default; set it to a JSON runner spec to override without a commit.
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
@@ -53,48 +71,62 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           lint-tools: "true"
-      - name: Lint + typecheck
+      - name: Check
         run: task check
-      # Outside the suite: `audit:*` is not a `test:*` target, so `test:suite`
-      # does not carry it, and `verify` runs it between `check` and the suite.
-      - run: task audit:agent-instructions
-      # Its own step, outside the suite it guards: it is also a suite member (so
-      # `verify` runs it), but deleting the suite step below would delete the
-      # only CI step that could notice — this one still fails then.
-      - name: Verify-CI parity guard (runs outside the suite it guards)
-        run: task test:verify-ci-parity
-      # The ONE step for every `test:*` target `task verify` runs. The list
-      # lives in Taskfile.yml's `test:suite` and nowhere else, so a check added
-      # to `verify` can no longer be missed here (harmon-init#962, #1461) —
-      # each entry carries the same answer gate in both places.
-      # `test:verify-ci-parity` (the step above) fails if this step is ever
-      # dropped.
-      #
-      # NOT here, deliberately: `validate` and `test`. Both are in `verify`
-      # unconditionally, but CI only invokes them from the build-test job,
-      # which is gated on use_node. So a repo with
-      # `(include_terraform or include_ansible) and not use_node` runs real
-      # terraform/ansible checks locally and none in CI. Adding them here is
-      # not a one-liner — `terraform validate` needs an init step CI does not
-      # have — so it is tracked as harmon-init#978 rather than fixed in the
-      # same breath.
-      - name: Test suite (every test:* target verify runs)
-        run: task test:suite
-      # Outside the suite, on purpose: a NETWORK check (`verify` stays offline).
-      - name: Skills drift check (vendored skills vs pinned harmon-devkit ref)
-        run: task verify:skills
-      - run: task test:hooks
-      # Outside the suite, on purpose: a `ci`-only unit check, not in `verify`.
-      - run: task test:devcontainer:permissions
 
 
-  build-test:
+  repo-guards:
     # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
     # default; set it to a JSON runner spec to override without a commit.
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          lint-tools: "true"
+      # Outside ci:repo-guards: deleting its suite call must not silence this guard.
+      - name: Verify-CI parity guard (runs outside the task it guards)
+        run: task test:verify-ci-parity
+      - name: Repository guards
+        run: task ci:repo-guards
+
+  devcontainer-permissions:
+    needs: changes
+    # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
+    # default; set it to a JSON runner spec to override without a commit.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Devcontainer permissions
+        run: task test:devcontainer:permissions
+
+  build-test:
+    needs: changes
+    # Measured core-scaling work: unset MULTICORE_RUNS_ON preserves
+    # CI_RUNS_ON and the rendered default.
+    runs-on: ${{ fromJSON(vars.MULTICORE_RUNS_ON || vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,6 +146,7 @@ jobs:
         run: task test
 
   e2e:
+    needs: changes
     # End-to-end (Playwright) — the PORT-BINDING test tier. It gets its own job
     # rather than joining build-test because `task verify` (and every other
     # agent-facing tier) is deliberately port-free; only `task ci` and this job
@@ -127,12 +160,14 @@ jobs:
     # from verify). Once a config exists, scripts/e2e-env-guard.sh must be
     # configured or this check fails (fail-closed by design).
     #
-    # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
-    # default; set it to a JSON runner spec to override without a commit.
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    # BROWSER_RUNS_ON selects this class; CI_RUNS_ON and the rendered
+    # default remain its fallbacks. Values are JSON runner label sets.
+    runs-on: ${{ fromJSON(vars.BROWSER_RUNS_ON || vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -141,7 +176,7 @@ jobs:
       - name: Detect Playwright config
         id: pw
         run: |
-          if find . -maxdepth 1 -name 'playwright.config.*' 2>/dev/null | grep -q .; then
+          if [ -n "$(find . -maxdepth 1 -name 'playwright.config.*' -print 2>/dev/null)" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -160,21 +195,25 @@ jobs:
         if: steps.pw.outputs.present == 'true'
         run: ./scripts/e2e-env-guard.sh
       - uses: ./.github/actions/setup
+        id: setup
+        with:
+          browsers: ${{ steps.pw.outputs.present == 'true' }}
+          browser-set: all
       # Every browser, not just chromium: this job runs the WHOLE suite, and the
       # convention is multi-browser + mobile projects (see
       # docs/architecture/tests.md). Installing one browser would fail this
       # blocking check on any config that declares firefox/webkit projects.
       #
       # Split by runner environment for the same reason the lighthouse job's
-      # Chrome install is: `--with-deps` shells out to apt via sudo. Hosted
-      # runners need that; persistent self-hosted machines already have the
-      # shared libs and may not have passwordless sudo, and wedging a REQUIRED
-      # check on sudo is not acceptable.
-      - name: Install Playwright browsers (hosted runner — apt via sudo)
+      # Chrome install is: install-deps shells out to apt via sudo. Hosted
+      # runners need that; self-hosted machines provide the shared libraries.
+      # The separate idempotent install always checks that browsers are present,
+      # even if a cache hit restored into a different runner workspace layout.
+      - name: Install Playwright system dependencies (hosted runner — apt via sudo)
         if: steps.pw.outputs.present == 'true' && runner.environment == 'github-hosted'
-        run: pnpm exec playwright install --with-deps
-      - name: Install Playwright browsers (self-hosted — no sudo/apt)
-        if: steps.pw.outputs.present == 'true' && runner.environment != 'github-hosted'
+        run: pnpm exec playwright install-deps
+      - name: Download Playwright browsers (idempotent — no sudo/apt)
+        if: steps.pw.outputs.present == 'true'
         run: pnpm exec playwright install
       - name: Build
         if: steps.pw.outputs.present == 'true'
@@ -207,12 +246,15 @@ jobs:
         run: task security:sast
 
   lighthouse:
-    # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
-    # default; set it to a JSON runner spec to override without a commit.
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    needs: changes
+    # BROWSER_RUNS_ON selects this class; CI_RUNS_ON and the rendered
+    # default remain its fallbacks. Values are JSON runner label sets.
+    runs-on: ${{ fromJSON(vars.BROWSER_RUNS_ON || vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
     timeout-minutes: 30
     permissions:
       contents: read
@@ -246,6 +288,8 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
+          MEASURED_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           LHCI_LINKS: ${{ steps.lighthouse.outputs.links }}
           LHCI_RESULTS_PATH: ${{ steps.lighthouse.outputs.resultspath }}
         with:
@@ -269,20 +313,23 @@ jobs:
             const body = [
               '## Lighthouse CI Results',
               '',
+              `_Measured commit: ${process.env.MEASURED_SHA} (merge of head ${process.env.HEAD_SHA})_`,
+              '',
               '| URL | Perf | A11y | BP | SEO | Report |',
               '|---|---|---|---|---|---|',
               rows,
               '',
               `_Run: [${context.runId}](${runUrl})_`,
             ].join('\n')
-            const { data: comments } = await github.rest.issues.listComments({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
+              per_page: 100,
             })
-            const existing = comments.find(c =>
+            const existing = comments.filter(c =>
               c.user.type === 'Bot' && c.body.startsWith('## Lighthouse CI Results')
-            )
+            ).pop()
             if (existing) {
               await github.rest.issues.updateComment({
                 comment_id: existing.id,
@@ -299,14 +346,57 @@ jobs:
               })
             }
 
+  lighthouse-stale-comment:
+    # Comment-only: no checkout, app execution, or deployment credentials.
+    needs: [changes, lighthouse]
+    if: >-
+      !cancelled() && github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.changes.result == 'success' && needs.changes.outputs.docs_only == 'true' &&
+      needs.lighthouse.result == 'skipped'
+    runs-on: ${{ fromJSON(vars.ISOLATED_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Mark existing Lighthouse CI Results comment as not refreshed
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const { owner, repo } = context.repo
+            const issue_number = context.issue.number
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number })
+            if (pr.head.sha !== process.env.HEAD_SHA) return
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            })
+            const existing = comments.filter(c =>
+              c.user.type === 'Bot' && c.body.startsWith('## Lighthouse CI Results')
+            ).pop()
+            if (!existing) return
+            const reflectedSha = existing.body.match(/_Measured commit: ([0-9a-f]{40}(?: \(merge of head [0-9a-f]{40}\))?)_/)?.[1]
+            const original = existing.body.split('\n\n<!-- docs-only-status -->')[0]
+            const body = [
+              original,
+              '',
+              '<!-- docs-only-status -->',
+              reflectedSha
+                ? `Head ${process.env.HEAD_SHA} was not re-measured (docs-only change). This comment still reflects commit ${reflectedSha}.`
+                : `Head ${process.env.HEAD_SHA} was not re-measured (docs-only change). This comment reflects an earlier measurement whose commit was not recorded.`,
+            ].join('\n')
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body })
+
   render-parity:
+    needs: changes
     # Proves a formatter-package bump didn't alter the built site's visible
     # text (see docs/CHECKLIST.md and scripts/test-astro-compress-parity.sh).
     # Builds the merge-base AND HEAD, so it is expensive — REQUIRED (listed in
     # verify.needs) rather than self-activating like e2e/a11y, so the job
-    # itself always runs and reports success either way: a job-level `if:`
-    # skip would report "skipped", which scripts/verify-ci-results.sh treats
-    # as a failure for a required job. The job always runs `task
+    # itself runs on every non-docs change. Only a classifier-authorized
+    # docs-only job skip is accepted by scripts/verify-ci-results.sh.
+    # On other changes the job runs `task
     # test:render-parity` unconditionally; render-parity.sh itself carries
     # the ONE trigger predicate (only a change to a known formatter package,
     # never an ordinary `*.astro` content edit or an unrelated dependency
@@ -320,8 +410,10 @@ jobs:
     # default; set it to a JSON runner spec to override without a commit.
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -335,34 +427,41 @@ jobs:
         run: task test:render-parity
 
   a11y:
+    needs: changes
     # Accessibility (axe-core via Playwright). NON-BLOCKING for now: intentionally
     # NOT in the `verify` needs list, so it reports but does not gate merges.
     # Self-activates once the app ships a playwright.config.* (before then
     # `task test:a11y` skips). To promote to a required check: add `a11y` to
     # verify.needs + a `check a11y` line, and to the ruleset's required checks.
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(vars.BROWSER_RUNS_ON || vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      !cancelled() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        (needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
       - name: Detect Playwright config
         id: pw
         run: |
-          if find . -maxdepth 1 -name 'playwright.config.*' 2>/dev/null | grep -q .; then
+          if [ -n "$(find . -maxdepth 1 -name 'playwright.config.*' -print 2>/dev/null)" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Install Playwright browsers (hosted runner — apt via sudo)
+      - uses: ./.github/actions/setup
+        id: setup
+        with:
+          browsers: ${{ steps.pw.outputs.present == 'true' }}
+          browser-set: chromium
+      - name: Install Playwright system dependencies (hosted runner — apt via sudo)
         if: steps.pw.outputs.present == 'true' && runner.environment == 'github-hosted'
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Install Playwright browsers (self-hosted — no sudo/apt)
-        if: steps.pw.outputs.present == 'true' && runner.environment != 'github-hosted'
+        run: pnpm exec playwright install-deps chromium
+      - name: Download Playwright browsers (idempotent — no sudo/apt)
+        if: steps.pw.outputs.present == 'true'
         run: pnpm exec playwright install chromium
       - name: Build site for accessibility tests
         if: steps.pw.outputs.present == 'true'
@@ -378,18 +477,23 @@ jobs:
     # 32767px limit — pre-existing content this template sync did not touch.
     # Add `e2e` here once that is fixed — see issue #59, which also lists the
     # two result aggregations below that must be updated with it.
-    needs: [lint, security, build-test, lighthouse, render-parity]
+    needs: [changes, check, repo-guards, devcontainer-permissions, security, build-test, lighthouse, render-parity]
     # Runner switch: CI_RUNS_ON repo/org variable unset -> the rendered
     # default; set it to a JSON runner spec to override without a commit.
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     env:
+      CI_EVENT_NAME: ${{ github.event_name }}
+      CHANGES_RESULT: ${{ needs.changes.result }}
+      DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
       IS_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       # Never check out or run fork-controlled repository code on this path.
       - name: Verify deliberate skips at the untrusted-fork boundary
         if: env.IS_FORK == 'true'
         env:
-          LINT_RESULT: ${{ needs.lint.result }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          REPO_GUARDS_RESULT: ${{ needs.repo-guards.result }}
+          DEVCONTAINER_PERMISSIONS_RESULT: ${{ needs.devcontainer-permissions.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
           BUILD_TEST_RESULT: ${{ needs.build-test.result }}
           LIGHTHOUSE_RESULT: ${{ needs.lighthouse.result }}
@@ -402,7 +506,10 @@ jobs:
               fail=1
             fi
           }
-          check_skipped lint "$LINT_RESULT"
+          check_skipped changes "$CHANGES_RESULT"
+          check_skipped check "$CHECK_RESULT"
+          check_skipped repo-guards "$REPO_GUARDS_RESULT"
+          check_skipped devcontainer-permissions "$DEVCONTAINER_PERMISSIONS_RESULT"
           check_skipped security "$SECURITY_RESULT"
           check_skipped build-test "$BUILD_TEST_RESULT"
           check_skipped lighthouse "$LIGHTHOUSE_RESULT"
@@ -419,11 +526,14 @@ jobs:
         if: env.IS_FORK != 'true'
         env:
           EXPECTED_RESULT: success
-          LINT_RESULT: ${{ needs.lint.result }}
+          DOCS_ONLY_JOBS: "devcontainer-permissions build-test e2e lighthouse render-parity"
+          CHECK_RESULT: ${{ needs.check.result }}
+          REPO_GUARDS_RESULT: ${{ needs.repo-guards.result }}
+          DEVCONTAINER_PERMISSIONS_RESULT: ${{ needs.devcontainer-permissions.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
           BUILD_TEST_RESULT: ${{ needs.build-test.result }}
           LIGHTHOUSE_RESULT: ${{ needs.lighthouse.result }}
           RENDER_PARITY_RESULT: ${{ needs.render-parity.result }}
-        run: ./scripts/verify-ci-results.sh "lint=${LINT_RESULT}" "security=${SECURITY_RESULT}" "build-test=${BUILD_TEST_RESULT}" "lighthouse=${LIGHTHOUSE_RESULT}" "render-parity=${RENDER_PARITY_RESULT}"
+        run: ./scripts/verify-ci-results.sh "changes=${CHANGES_RESULT}" "check=${CHECK_RESULT}" "repo-guards=${REPO_GUARDS_RESULT}" "devcontainer-permissions=${DEVCONTAINER_PERMISSIONS_RESULT}" "security=${SECURITY_RESULT}" "build-test=${BUILD_TEST_RESULT}" "lighthouse=${LIGHTHOUSE_RESULT}" "render-parity=${RENDER_PARITY_RESULT}"
 # Keep a literal final line after the inline Jinja conditionals above; with
 # trim_blocks enabled, ending on a block tag would strip the workflow's EOF newline.

@@ -103,13 +103,59 @@ OpenCode's workspace config does. Antigravity's,
 OpenCode's and oh-my-pi's settings live on named volumes that outlive a container rebuild,
 so each records the pre-`apply` value and offers a `restore` mode, the same
 reversibility pattern.
-**Antigravity autonomy is off by default.** The CLI is available in the shared
-image, but this template does not authenticate it or weaken its permission
-policy unless `use_antigravity_cli` is explicitly enabled — its bot-autonomy
-module still exists (a prompt-enabled Antigravity CLI is the
-verified-correct state at this answer, not an uncovered gap), it just writes
-no autonomy configuration. If an earlier template update enabled it,
-post-create restores the policy values recorded before that opt-in.
+
+**Antigravity autonomy is enabled.** Two profiles, two policies:
+
+- **Bot profile — full autonomy.** It applies `always-proceed`, always accepts
+  artifact reviews, allows non-workspace access, disables Antigravity's inner
+  terminal sandbox, configures the devcontainer status line renderer, and trusts
+  the current container workspace — the container is the isolation boundary.
+  Interactive `agy` honors that policy directly; **headless `agy -p …` ignores
+  settings allow-rules and auto-denies**, so bot `apply` installs a real
+  executable at `~/.local/bin/agy` (`bot-autonomy/antigravity.sh`, replacing an
+  earlier shell-function wrapper that only covered a login shell) that injects
+  `--dangerously-skip-permissions` for agent runs. The `Dockerfile`'s
+  `ENV PATH` puts `~/.local/bin` ahead of the system binary container-wide,
+  so the wrapper's precedence holds for a `docker exec` or any other
+  programmatic launcher too — not only interactive shells (a
+  `devcontainer.json` `containerEnv.PATH` self-reference cannot work here:
+  Docker passes `${containerEnv:PATH}` through unresolved when creating the
+  container). A launcher that resolves `agy` some other way must still pass
+  that flag itself.
+- **Dev (human) profile — balanced.** It auto-accepts edits/artifacts and an
+  allowlist of common commands (`task`, `git`, `gh`, linters, test runners, …)
+  so routine work is prompt-free, but still asks before anything unlisted and
+  keeps Antigravity's workspace and sandbox boundaries. Tune the allowlist in
+  `.devcontainer/config/antigravity-settings-dev.json`.
+
+Run `agy` interactively once to complete Google sign-in — Antigravity has no
+API-key environment variable, so even a disposable container needs that one
+human login; the pinned CLI falls back to file-backed credentials when the
+headless container has no D-Bus keyring, and the `~/.gemini` named volume
+persists the login across rebuilds. A checksum-verified compatibility installer
+(`config/ensure-antigravity-cli.sh`) covers the interval before the shared-image
+pin advances: `agy` is repointed to `~/.local/bin/agy-real` as a plain
+symlink whenever an executable local copy exists — already at the
+pinned version, or replaced from a matching system binary when it
+wasn't. Once the image ships the pinned version directly, with no local
+copy needed, it becomes a network-free no-op, leaving both files absent
+on a fresh volume so `agy` resolves straight to the system binary; if
+something already occupies `agy` at that exact point instead, it is left
+exactly as found unless it would break a later replacement — a dangling
+symlink (its target already gone) or a symlink to an existing directory
+(which the bot's later wrapper install — an unguarded `mv -f` — cannot
+cleanly replace, landing inside the directory instead) — either of which
+this installer removes instead, in both profiles. Either way, the
+bot's `apply` still installs its flag-injecting wrapper
+over whatever this installer
+leaves. It is gated on the rendered
+`containerEnv.HARMON_BOT_AUTONOMY_ANTIGRAVITY` marker — turning the Copier
+answer off downloads nothing and removes only a launcher or executable whose
+own durable identity-and-content proof still matches; independent user files
+and symlinks at either name are preserved. The settings helper backs up the
+six policy keys it owns and tracks its
+workspace-trust entry, so turning the Copier option off restores them while
+preserving unrelated settings.
 
 **Copilot CLI autonomy is off by default.** The CLI is available in the shared
 image, but this template neither authenticates it nor weakens its permission

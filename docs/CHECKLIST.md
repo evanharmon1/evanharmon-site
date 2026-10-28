@@ -32,7 +32,8 @@ environment — against the items below
       `.skills-sync.yaml`, then run `task skills:status` to see the current
       vendoring state without changing anything (add `-- --offline` for an
       offline snapshot). Then run `task sync:skills` and commit the refreshed
-      `.claude/skills/` and `.claude/agents/` in the same PR. Renovate surfaces a new release in the
+      `.claude/skills/` and `.claude/agents/`
+      in the same PR. Renovate surfaces a new release in the
       Dependency Dashboard; approve it there to open the pin PR, then run the
       sync and push its output as a separate commit (do not amend Renovate's
       commit). Renovate cannot do the re-sync, so a ref-only commit fails the
@@ -56,17 +57,32 @@ the compatibility reason in the rule's `description`.
 
 - [x] **Automated settings** — run `task setup:github` (idempotent, safe to
       re-run): enables **Dependabot alerts** and **private vulnerability
-      reporting** when public, and reconciles the repository's `CI_RUNS_ON`
-      variable from the selected runner settings (the repository value
-      intentionally takes precedence over an organization fallback). Every existing value is preserved on non-public
-      repositories, and public repositories are standardized to
-      `"ubuntu-latest"` even when the Copier answers or an existing variable
-      select different routing. Re-run this task
-      after changing Copier runner answers; an existing non-public value
-      remains authoritative and must be changed intentionally by running
-      `scripts/setup-github.sh` with `--replace-ci-runs-on`. Do not add
-      `dependabot.yml`: Renovate owns routine
-      and vulnerability-remediation PRs; Dependabot owns advisory alerts.
+      reporting** when public. Routing uses `CI_RUNS_ON`, `BROWSER_RUNS_ON`,
+      `IMAGE_BUILD_RUNS_ON`, `MULTICORE_RUNS_ON` and `ISOLATED_RUNS_ON`. Public
+      repositories always create or replace all five repository overrides as
+      `"ubuntu-latest"`, even without flags, so inherited persistent runners
+      cannot reach jobs.
+      On private/internal repositories, the script creates missing values only
+      with `--ci-runs-on`, `--browser-runs-on`, `--multicore-runs-on`,
+      `--image-build-runs-on` or `--isolated-runs-on`; intentional replacement
+      also requires the matching `--replace-*` flag. `task setup:github`
+      supplies the rendered CI answer; pass other class flags after `--`,
+      for example `task setup:github -- --browser-runs-on '"ubuntu-latest"'`.
+      Repository values shadow organization values. Isolated selectors may be
+      strings, label arrays, or objects with usable `labels`; `self-hosted` is
+      refused case-insensitively, and unsupported shapes fail closed. Requested
+      invalid isolated values fail before any GitHub access or writes. Repair
+      an existing unsafe repository value with a safe `--isolated-runs-on` plus
+      `--replace-isolated-runs-on` (public repositories repair unsafe and
+      unsupported values automatically before organization checks). Private/internal unsupported shapes fail
+      closed. Unsafe or unsupported organization values fail only when inherited,
+      with no repository isolated override. A safe repository value or an explicit
+      safe isolated value plus replace flag shadows them and succeeds with a
+      warning. Otherwise ask the organization's routing owner (whoever manages
+      organization Actions variables) to repair them, or create a safe override.
+      Unreadable organization values report unknown without failing setup; `task status:setup` reports known violations. Do not add
+      `dependabot.yml`: Renovate owns routine and vulnerability-remediation PRs;
+      Dependabot owns advisory alerts.
 - [ ] **Bot PAT** — the agent's `GH_TOKEN`. If a fine-grained PAT already covers
       `evanharmon1`,
       just add this repo to its **selected repositories**; a token is scoped to one
@@ -115,10 +131,12 @@ the compatibility reason in the rule's `description`.
       checks, issues (including the Dependency Dashboard), or update/remediation
       PRs. This repo already has `renovate.json`; keep that configuration rather
       than replacing it with a generic onboarding config.
-- [-] **[human-only] Confirm CodeRabbit has no access** — for a repository that
-      previously used it, remove this repo from the CodeRabbit GitHub App
-      installation. Deleting `.coderabbit.yaml` and bot trust does not revoke
-      existing App access.
+- [ ] Install the [CodeRabbit app](https://github.com/apps/coderabbitai) on the repo (`.coderabbit.yaml` is pre-configured, including `reviews.auto_review.drafts: true` so it reviews the draft workbench rather than firing on promotion)
+- [ ] **[human-only] Connect Gemini Code Assist on GitHub** — in Google Cloud
+      Console (under your foundation project), navigate to **Gemini Code Assist →
+      Agents & Tools → Code Assist Source Code Management**, create/select the
+      connection in `us-east1`, install the Gemini Code Assist GitHub App for
+      this repository, and complete the Cloud-side repository link.
 - [x] **[human-only] Connect Codex cloud review** — connect this repository in
       ChatGPT Codex settings, grant private-repository access if applicable,
       and confirm review activity is authored by GitHub actor ID `199175422`
@@ -179,6 +197,16 @@ the compatibility reason in the rule's `description`.
       review at the head, or a 👍 from that login on foreman's own request
       comment — still mean what the readiness gate assumes, and that required
       checks run on draft PRs (foreman promotes only after they conclude).
+- [ ] **Disable GitHub CodeQL Default setup** — with the shipped advanced
+      `codeql.yml` workflow, GitHub's CodeQL Default setup must be off
+      (**Settings → Advanced Security → CodeQL analysis**, or
+      `gh api --method PATCH repos/OWNER/REPO/code-scanning/default-setup -f state=not-configured`
+      — for this repo, `repos/evanharmon1/evanharmon-site/code-scanning/default-setup`),
+      because GitHub refuses advanced uploads while Default setup is on. If
+      Default setup was enabled after the advanced workflow existed, GitHub
+      disabled that workflow — then re-enable the CodeQL workflow (**Actions →
+      CodeQL → "Enable workflow"**, or `gh workflow enable codeql.yml`). Keep it
+      off (re-enabling it re-triggers the collision).
 - [x] **SAST coverage** — public repositories run CodeQL automatically and for
       free for the selected `codeql_languages`; confirm a successful upload in
       the Security tab. Free private repos
@@ -200,6 +228,14 @@ the compatibility reason in the rule's `description`.
       correctly. The workflow is advisory and never a required PR check.
 - [x] **Create** the CI GitHub App `evanharmon1-ci` by hand (one App per org;
       **Settings → Developer settings → GitHub Apps**), or reuse the org's existing one.
+- [ ] **[human-only] Confirm CI GitHub App permissions** — the App must grant
+      **Checks: Read-only**, **Commit statuses: Read-only**, and
+      **Actions: Read-only** for
+      claude-implement's `gh pr checks`. For an existing App, update its
+      **Permissions & events** and accept the new permissions on **every
+      installation**; until then, `create-github-app-token` fails and
+      claude-implement cannot start. See
+      [architecture/security.md](architecture/security.md#ci-automation-identity-github-app).
 - [x] **Install** the App on this repo — **Install App → Only select repositories**
       (the harmon-init repos that run release-please / claude-* / project-automation),
       **not "All"**. **Creating the App is not enough:** an App whose credentials are
@@ -456,6 +492,11 @@ the compatibility reason in the rule's `description`.
       release line the block already floors (its `pkg@<major>` or
       `pkg@0.<minor>` key) is refused there, so raise that one upstream
       instead.
+      For a live, unpatched dev-only advisory, a reviewed entry in
+      `.security-audit-allowances.json` may last at most 90 days. Production
+      reachability, available patches, expiry, malformed or stale entries fail
+      the audit; Copier preserves this consumer-owned file on update. See
+      [security.md](architecture/security.md#unpatched-dev-only-advisory-allowances).
       Add any other packages whose build
       scripts your deps need to `allowBuilds` (or run `pnpm approve-builds`); keep
       all pnpm `overrides` / `auditConfig` there too, **not** in the `package.json`
