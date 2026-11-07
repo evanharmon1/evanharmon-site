@@ -59,7 +59,7 @@ runs:
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
       with:
         # renovate: datasource=node-version
-        node-version: "24"
+        node-version: "26"
         cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
     - name: Verify job-private pnpm store
       shell: bash
@@ -273,7 +273,7 @@ runs:
       shell: bash
       run: |
         # renovate: datasource=npm depName=snyk
-        SNYK_VERSION=1.1308.3
+        SNYK_VERSION=1.1308.4
         # Same reuse-only-on-exact-match reasoning, and the same "|| true"
         # abort-under-set-e reasoning, as gitleaks above.
         installed_snyk_version=
