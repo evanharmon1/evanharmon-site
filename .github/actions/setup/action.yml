@@ -43,7 +43,7 @@ runs:
       run: |
         echo '::error::browsers: true requires cache: true; credential-holding jobs must disable browsers and cache.' >&2
         exit 1
-    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
     # pnpm 10 reads npm_config_store_dir; pnpm 11+ reads
     # PNPM_CONFIG_STORE_DIR. Export both forms of `--store-dir` to the
     # same job-private base. $RUNNER_TEMP is emptied for every job;
