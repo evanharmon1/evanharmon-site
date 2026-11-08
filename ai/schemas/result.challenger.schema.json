@@ -5,7 +5,15 @@
   "$comment": "This schema describes the SHAPE of `payload` for role: challenger — see result.envelope.schema.json for how the two compose. One instance is one PASS: one finder's contribution to the challenge stage (docs/glossary.md, docs/product/domain.md § Concepts). specs/dev-flow-v2.md § Roles and authority: the challenger attacks the design and approach — attack scenarios, design-level findings, de-scaffolding recommendations — and does not perform the reviewer's consistency and test-gap check. `stage`, `round`, `reviewed_head`, `finder`, `findings[]` (each finding: `id`, `path`, `line`, `class`, `provenance`, `fingerprint`, `priority`, `recommended_disposition`, `evidence`), and `counts` are FIELD-FOR-FIELD IDENTICAL to result.reviewer.schema.json's own pass core (agent-registry.json #635's finder metadata calls this the shared finding core) so one evaluator (#636's exit script) computes over both without a role-specific branch — a design-level finding is simply a finding with `class: design`, and a de-scaffolding recommendation is simply a finding whose `recommended_disposition` is `delete` or `restructure`; neither needs a field of its own. The one genuinely new payload element is `attack_scenarios[]`: adversarial scenarios the challenger attempted, independent of whether each one surfaced a finding — evidence that the design was actually attacked, not just that defects were found. This payload is immutable once returned and carries NO adjudicated fields (no adjudicated_priority, no disposition) — additionalProperties:false enforces that; adjudication.schema.json is a separate, orchestrator-authored overlay. Unlike result.reviewer.schema.json's `stage` (an enum admitting both challenge and review, a legacy of the single pre-split reviewer contract), this schema's `stage` is a `const: \"challenge\"` — a challenger, by role definition, produces only challenge-stage passes.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["stage", "round", "reviewed_head", "finder", "findings", "counts", "attack_scenarios"],
+  "required": [
+    "stage",
+    "round",
+    "reviewed_head",
+    "finder",
+    "findings",
+    "counts",
+    "attack_scenarios"
+  ],
   "properties": {
     "stage": {
       "description": "Always challenge — the challenger role never produces a review-stage pass (that is the reviewer role's contract, result.reviewer.schema.json). A single legal value is expressed as const, not a one-member enum, matching this family's convention for fields with exactly one valid value (e.g. the envelope's `schema: const 2`).",
@@ -35,6 +43,23 @@
       "description": "Present only on a fallback pass: the configured primary finder slug this pass substituted for after the primary was unavailable past its retry (specs/dev-flow-v2.md § Configuration). Absent on a primary pass, where `finder == slot` already says everything.",
       "type": "string",
       "minLength": 1
+    },
+    "invocation_observations": {
+      "description": "Optional, backward-compatible evidence captured from each actual Codex CLI invocation that contributed to this labelled-text pass. Never infer an observation from policy or the requested effort. Retries are separate entries in execution order; an unknown banner remains effective=unknown, source=unknown, matched=false. Omit this field when no invocation observation was captured (including older immutable passes).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt", "requested", "effective", "source", "matched"],
+        "properties": {
+          "attempt": { "type": "integer", "minimum": 1 },
+          "requested": { "enum": ["low", "medium", "high", "xhigh"] },
+          "effective": { "enum": ["low", "medium", "high", "xhigh", "unknown"] },
+          "source": { "enum": ["banner", "unknown"] },
+          "matched": { "type": "boolean" }
+        }
+      }
     },
     "findings": {
       "description": "May be empty — a challenge round returning zero findings is a normal, schema-valid pass (specs/dev-flow-v2.md Acceptance criteria: a confidence role cannot end a stage on its own recommendation, including an empty findings list). A design-level finding is one with `class: design`; a de-scaffolding recommendation is one whose `recommended_disposition` is `delete` or `restructure` — both are ordinary entries in this same array, not a separate field.",
