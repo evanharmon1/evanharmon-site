@@ -2663,7 +2663,7 @@
               "pool": null
             },
             "integration": {
-              "finders": ["codex-cloud"],
+              "finders": ["codex-cloud", "claude", "greptile", "coderabbit-cloud", "gemini"],
               "finder_fallbacks": [],
               "pool": null,
               "review_trigger": "after-ci"
