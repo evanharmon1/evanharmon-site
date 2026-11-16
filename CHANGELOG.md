@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are cut manually with `task release:patch|minor|major` (never
 automatically on merge).
 
+## [0.3.10](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.9...v0.3.10) (2026-11-16)
+
+
+### Bug Fixes
+
+* sync harmon-devkit skills to v0.69.0 ([#176](https://github.com/evanharmon1/evanharmon-site/issues/176)) ([55578c9](https://github.com/evanharmon1/evanharmon-site/commit/55578c9b43674938aa5ff93da88907fdd1d6cadf))
+
 ## [0.3.9](https://github.com/evanharmon1/evanharmon-site/compare/v0.3.8...v0.3.9) (2026-10-25)
 
 
